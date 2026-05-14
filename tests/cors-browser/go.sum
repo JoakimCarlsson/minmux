@@ -1,0 +1,6 @@
+github.com/coder/websocket v1.8.14 h1:9L0p0iKiNOibykf283eHkKUHHrpG7f65OE3BhhO7v9g=
+github.com/coder/websocket v1.8.14/go.mod h1:NX3SzP+inril6yawo5CQXx8+fk145lPDC6pumgx0mVg=
+github.com/joakimcarlsson/bonk v0.3.0 h1:c098AC5k1r6U9nTt9MjStUjbW5iS2R4F11WXfWqMSOk=
+github.com/joakimcarlsson/bonk v0.3.0/go.mod h1:zFZWStSeqh3zoFaF12U01PWE+pGnjaeulfRZa9KuvvA=
+golang.org/x/image v0.37.0 h1:ZiRjArKI8GwxZOoEtUfhrBtaCN+4b/7709dlT6SSnQA=
+golang.org/x/image v0.37.0/go.mod h1:/3f6vaXC+6CEanU4KJxbcUZyEePbyKbaLoDOe4ehFYY=

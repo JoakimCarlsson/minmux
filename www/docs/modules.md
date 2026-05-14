@@ -18,6 +18,12 @@ You install only the modules you use.
 |---|---|
 | `openapi` | OpenAPI 3.1 spec generation from explicit endpoint annotations. Depends on `router`. |
 
+## Middleware
+
+| Module | Purpose |
+|---|---|
+| `cors` | CORS middleware compatible with any `http.Handler`. Zero external dependencies. |
+
 ## Planned
 
 Modules slated for follow-up releases:
@@ -25,6 +31,3 @@ Modules slated for follow-up releases:
 - `outputcache` — HTTP response caching with pluggable storage and
   flexible cache key strategies.
 - `scalar` — Scalar docs UI for serving the generated OpenAPI spec.
-- Additional middleware and integrations (CORS, auth, rate limiting)
-  may stay inside `router` or graduate to their own modules as they
-  grow.

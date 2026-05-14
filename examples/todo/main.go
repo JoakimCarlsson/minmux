@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/joakimcarlsson/minmux/cors"
 	"github.com/joakimcarlsson/minmux/openapi"
 	"github.com/joakimcarlsson/minmux/router"
 )
@@ -239,6 +240,7 @@ func (a *API) Delete(c *router.Context, p DeleteTodoParams) {
 func main() {
 	api := &API{store: NewStore()}
 	r := router.New()
+	r.Use(cors.Default())
 	api.Register(r)
 
 	gen := openapi.NewGenerator(openapi.Info{

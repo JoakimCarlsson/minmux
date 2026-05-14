@@ -1,7 +1,8 @@
-go 1.25
+go 1.26.0
 
 use (
 	./router
 	./openapi
-	./examples/todo
+	./cors
+	./tests/cors-browser
 )
