@@ -92,6 +92,33 @@ r.Post("/users", func(c *router.Context, p CreateParams) {
 
 Invalid JSON returns a 400 ProblemDetails automatically.
 
+## Field formats
+
+Numeric Go types map automatically to OAS 3.2 formats: `int32`/`uint32`
+become `format: int32`, `int64`/`int`/`uint64`/`uint` become
+`format: int64`, `float32` becomes `format: float`, and `float64`
+becomes `format: double`. Unsigned types also get `minimum: 0`.
+
+For string formats that the type system can't tell us about (`email`,
+`password`, `uuid`, `uri`, `date`, etc.), add a `format:"..."` struct
+tag. It works on parameter fields and body/response struct fields, and
+the value is passed through to the generated schema as-is:
+
+```go
+type SignupCommand struct {
+    Email    string `json:"email"    format:"email"`
+    Password string `json:"password" format:"password"`
+}
+
+type LookupParams struct {
+    UserID string `query:"user_id" format:"uuid"`
+}
+```
+
+The tag also overrides the auto-inferred numeric format on the rare
+occasion you want to widen an `int32` field to `int64` in the spec,
+for example.
+
 ## Error responses
 
 For domain errors you write the response explicitly. Use the

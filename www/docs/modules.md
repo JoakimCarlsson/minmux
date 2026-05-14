@@ -16,7 +16,7 @@ You install only the modules you use.
 
 | Module | Purpose |
 |---|---|
-| `openapi` | OpenAPI 3.2 spec generation from explicit endpoint annotations. Depends on `router`. |
+| `openapi` | OpenAPI 3.2 spec generation from explicit endpoint annotations, with auto-mapped numeric formats (int32/int64/float/double) and a `format:"..."` struct tag for string formats (email, password, uuid, ...). Depends on `router`. |
 
 ## Middleware
 

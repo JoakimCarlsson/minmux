@@ -43,6 +43,58 @@ func TestInlineSchema_Scalars(t *testing.T) {
 	}
 }
 
+func TestInlineSchema_NumericFormats(t *testing.T) {
+	cases := []struct {
+		name       string
+		val        any
+		wantType   string
+		wantFormat string
+		wantMin    bool
+	}{
+		{"int8", int8(0), "integer", "", false},
+		{"int16", int16(0), "integer", "", false},
+		{"int32", int32(0), "integer", "int32", false},
+		{"int64", int64(0), "integer", "int64", false},
+		{"int", int(0), "integer", "int64", false},
+		{"uint8", uint8(0), "integer", "", true},
+		{"uint16", uint16(0), "integer", "", true},
+		{"uint32", uint32(0), "integer", "int32", true},
+		{"uint64", uint64(0), "integer", "int64", true},
+		{"uint", uint(0), "integer", "int64", true},
+		{"float32", float32(0), "number", "float", false},
+		{"float64", float64(0), "number", "double", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := newSchemaBuilder().schema(reflect.TypeOf(c.val))
+			if got.Type != c.wantType {
+				t.Errorf("type: want %q, got %q", c.wantType, got.Type)
+			}
+			if got.Format != c.wantFormat {
+				t.Errorf("format: want %q, got %q", c.wantFormat, got.Format)
+			}
+			if c.wantMin {
+				if got.Minimum == nil || *got.Minimum != 0 {
+					t.Errorf("minimum: want 0, got %+v", got.Minimum)
+				}
+			} else if got.Minimum != nil {
+				t.Errorf("minimum: want unset, got %+v", *got.Minimum)
+			}
+		})
+	}
+}
+
+func TestSchema_MinimumMarshalsAsZero(t *testing.T) {
+	got := newSchemaBuilder().schema(reflect.TypeOf(uint32(0)))
+	raw, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(raw), `"minimum":0`) {
+		t.Errorf("minimum should marshal as 0 (not 0.0), got %s", raw)
+	}
+}
+
 func TestInlineSchema_Time(t *testing.T) {
 	got := newSchemaBuilder().schema(reflect.TypeOf(time.Time{}))
 	if got.Type != "string" || got.Format != "date-time" {
@@ -233,6 +285,18 @@ type bodyParams struct {
 	Body User `body:""`
 }
 
+type formattedQueryParams struct {
+	Email string `query:"email" format:"email"`
+	ID    int32  `query:"id"    format:"int64"`
+}
+
+type formattedBody struct {
+	Email    string `json:"email"    format:"email"`
+	Password string `json:"password" format:"password"`
+	UUID     string `json:"uuid"     format:"uuid"`
+	Untagged string `json:"untagged"`
+}
+
 func noop(c *router.Context)              {}
 func noopP[P any](c *router.Context, p P) {}
 func noopUser(c *router.Context)          {}
@@ -282,6 +346,59 @@ func TestSpec_HeaderParam(t *testing.T) {
 	if len(op.Parameters) != 1 || op.Parameters[0].Name != "X-Trace-Id" ||
 		op.Parameters[0].In != "header" {
 		t.Errorf("header param: %+v", op.Parameters)
+	}
+}
+
+func TestSpec_FormatTagOnQueryParam(t *testing.T) {
+	r := router.New()
+	r.Get("/items", noopP[formattedQueryParams])
+	op := operation(t, r, "/items", "GET")
+	byName := map[string]*Parameter{}
+	for _, p := range op.Parameters {
+		byName[p.Name] = p
+	}
+	if got := byName["email"].Schema; got.Type != "string" ||
+		got.Format != "email" {
+		t.Errorf("email param: want string/email, got %+v", got)
+	}
+	if got := byName["id"].Schema; got.Type != "integer" ||
+		got.Format != "int64" {
+		t.Errorf("id param: tag should override auto int32, got %+v", got)
+	}
+}
+
+func TestSchema_FormatTagOnStructFields(t *testing.T) {
+	b := newSchemaBuilder()
+	got := b.schema(reflect.TypeOf(formattedBody{}))
+	if got.Ref == "" {
+		t.Fatalf("formattedBody should be hoisted, got %+v", got)
+	}
+	body := b.components["formattedBody"]
+	if body == nil {
+		t.Fatalf("formattedBody not in components: %v", b.components)
+	}
+	cases := []struct {
+		field      string
+		wantFormat string
+	}{
+		{"email", "email"},
+		{"password", "password"},
+		{"uuid", "uuid"},
+		{"untagged", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.field, func(t *testing.T) {
+			s := body.Properties[c.field]
+			if s == nil {
+				t.Fatalf("missing property %q", c.field)
+			}
+			if s.Type != "string" {
+				t.Errorf("type: want string, got %q", s.Type)
+			}
+			if s.Format != c.wantFormat {
+				t.Errorf("format: want %q, got %q", c.wantFormat, s.Format)
+			}
+		})
 	}
 }
 

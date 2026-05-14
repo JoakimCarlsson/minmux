@@ -125,7 +125,7 @@ func (b *schemaBuilder) buildParams(
 				Name:     v,
 				In:       "path",
 				Required: true,
-				Schema:   b.schema(f.Type),
+				Schema:   applyFieldFormat(b.schema(f.Type), f),
 			})
 			continue
 		}
@@ -133,7 +133,7 @@ func (b *schemaBuilder) buildParams(
 			params = append(params, &Parameter{
 				Name:   v,
 				In:     "query",
-				Schema: b.schema(f.Type),
+				Schema: applyFieldFormat(b.schema(f.Type), f),
 			})
 			continue
 		}
@@ -141,7 +141,7 @@ func (b *schemaBuilder) buildParams(
 			params = append(params, &Parameter{
 				Name:   v,
 				In:     "header",
-				Schema: b.schema(f.Type),
+				Schema: applyFieldFormat(b.schema(f.Type), f),
 			})
 			continue
 		}
@@ -216,11 +216,22 @@ func (b *schemaBuilder) inline(t reflect.Type) *Schema {
 		return &Schema{Type: "string"}
 	case reflect.Bool:
 		return &Schema{Type: "boolean"}
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+	case reflect.Int8, reflect.Int16:
 		return &Schema{Type: "integer"}
-	case reflect.Float32, reflect.Float64:
-		return &Schema{Type: "number"}
+	case reflect.Int32:
+		return &Schema{Type: "integer", Format: "int32"}
+	case reflect.Int, reflect.Int64:
+		return &Schema{Type: "integer", Format: "int64"}
+	case reflect.Uint8, reflect.Uint16:
+		return &Schema{Type: "integer", Minimum: zero()}
+	case reflect.Uint32:
+		return &Schema{Type: "integer", Format: "int32", Minimum: zero()}
+	case reflect.Uint, reflect.Uint64:
+		return &Schema{Type: "integer", Format: "int64", Minimum: zero()}
+	case reflect.Float32:
+		return &Schema{Type: "number", Format: "float"}
+	case reflect.Float64:
+		return &Schema{Type: "number", Format: "double"}
 	case reflect.Slice, reflect.Array:
 		return &Schema{Type: "array", Items: b.schema(t.Elem())}
 	case reflect.Map:
@@ -229,6 +240,11 @@ func (b *schemaBuilder) inline(t reflect.Type) *Schema {
 		return b.structSchema(t)
 	}
 	return &Schema{Type: "object"}
+}
+
+func zero() *float64 {
+	z := 0.0
+	return &z
 }
 
 func (b *schemaBuilder) structSchema(t reflect.Type) *Schema {
@@ -250,7 +266,18 @@ func (b *schemaBuilder) structSchema(t reflect.Type) *Schema {
 				name = tag
 			}
 		}
-		props[name] = b.schema(f.Type)
+		props[name] = applyFieldFormat(b.schema(f.Type), f)
 	}
 	return &Schema{Type: "object", Properties: props}
+}
+
+// applyFieldFormat applies a struct field's `format:"..."` tag to its
+// schema, overriding any auto-inferred format. The tag is a passthrough
+// for OAS-registered formats (email, password, uuid, uri, ...) that
+// cannot be inferred from the Go type alone.
+func applyFieldFormat(s *Schema, f reflect.StructField) *Schema {
+	if v, ok := f.Tag.Lookup("format"); ok && v != "" {
+		s.Format = v
+	}
+	return s
 }
