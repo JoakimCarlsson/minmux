@@ -23,7 +23,7 @@ You install only the modules you use.
 
 | Module | Purpose |
 |---|---|
-| `cors` | CORS middleware compatible with any `http.Handler`. Zero external dependencies. |
+| `cors` | CORS middleware compatible with any `http.Handler`. Zero external dependencies. See [CORS](middleware/cors.md). |
 
 ## Caching
 

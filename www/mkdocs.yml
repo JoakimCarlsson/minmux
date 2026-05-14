@@ -20,7 +20,6 @@ theme:
         name: Switch to dark mode
   features:
     - navigation.sections
-    - navigation.expand
     - navigation.top
     - content.code.copy
     - content.code.annotate
@@ -40,12 +39,16 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Modules: modules.md
   - Getting Started:
     - Installation: getting-started/installation.md
     - Quick Start: getting-started/quick-start.md
-  - Streaming: streaming.md
-  - Security: security.md
-  - Scalar UI: scalar-ui.md
+    - Feature Tour: feature-tour.md
+  - Modules: modules.md
+  - OpenAPI:
+    - Streaming: streaming.md
+    - Security: security.md
+    - Scalar UI: scalar-ui.md
+  - Middleware:
+    - CORS: middleware/cors.md
   - Caching:
     - Output Cache: caching/outputcache.md

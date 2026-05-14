@@ -87,8 +87,10 @@ func main() {
 }
 ```
 
-A working multi-endpoint example lives in `examples/todo/` — see the
-[Quick Start](getting-started/quick-start.md) for a walkthrough.
+A working multi-endpoint example lives in `examples/todo/`. New here?
+Start with the [Quick Start](getting-started/quick-start.md); for a
+guided walk through the rest of the surface see the
+[Feature Tour](feature-tour.md).
 
 ## Status
 
