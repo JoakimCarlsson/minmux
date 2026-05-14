@@ -2,6 +2,8 @@ package openapi
 
 import (
 	"encoding/json"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -11,7 +13,13 @@ import (
 	"github.com/joakimcarlsson/minmux/router"
 )
 
-var timeType = reflect.TypeOf(time.Time{})
+var (
+	timeType          = reflect.TypeOf(time.Time{})
+	readerType        = reflect.TypeFor[io.Reader]()
+	bytesType         = reflect.TypeFor[[]byte]()
+	fileHeaderPtrType = reflect.TypeFor[*multipart.FileHeader]()
+	fileHeaderSlcType = reflect.TypeFor[[]*multipart.FileHeader]()
+)
 
 // Info is the OpenAPI document info block.
 type Info struct {
@@ -112,9 +120,23 @@ func (b *schemaBuilder) buildOperation(ep *router.Endpoint) *Operation {
 	return op
 }
 
+// formProperty captures a single form: / file: field for assembling a
+// multipart or x-www-form-urlencoded request body schema.
+type formProperty struct {
+	name     string
+	schema   *Schema
+	encoding *Encoding
+	required bool
+}
+
 func (b *schemaBuilder) buildParams(
 	t reflect.Type,
 ) (params []*Parameter, body *RequestBody) {
+	var (
+		formProps []formProperty
+		fileProps []formProperty
+		bodyField *reflect.StructField
+	)
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		if !f.IsExported() {
@@ -145,16 +167,160 @@ func (b *schemaBuilder) buildParams(
 			})
 			continue
 		}
+		if v, ok := f.Tag.Lookup("form"); ok {
+			formProps = append(formProps, formProperty{
+				name:     v,
+				schema:   applyFieldFormat(b.schema(f.Type), f),
+				required: isRequiredKind(f.Type),
+			})
+			continue
+		}
+		if v, ok := f.Tag.Lookup("file"); ok {
+			fileProps = append(fileProps, formProperty{
+				name:     v,
+				schema:   fileSchema(f.Type),
+				encoding: encodingFromTag(f),
+				required: f.Type == fileHeaderPtrType,
+			})
+			continue
+		}
 		if _, ok := f.Tag.Lookup("body"); ok {
-			body = &RequestBody{
-				Required: true,
-				Content: map[string]*MediaType{
-					"application/json": {Schema: b.schema(f.Type)},
-				},
-			}
+			f := f
+			bodyField = &f
 		}
 	}
+
+	body = b.buildRequestBody(formProps, fileProps, bodyField)
 	return params, body
+}
+
+// buildRequestBody picks the right content type based on the tag mix and
+// builds the corresponding RequestBody. The precedence is:
+//
+//   - any file: field   -> multipart/form-data (with form fields as text parts)
+//   - else any form:    -> application/x-www-form-urlencoded
+//   - else body: stream -> application/octet-stream (or contentType tag values)
+//   - else body: struct -> application/json (existing behavior)
+//   - else              -> no request body
+func (b *schemaBuilder) buildRequestBody(
+	formProps, fileProps []formProperty,
+	bodyField *reflect.StructField,
+) *RequestBody {
+	if len(fileProps) > 0 {
+		return formRequestBody(
+			"multipart/form-data", append(formProps, fileProps...),
+		)
+	}
+	if len(formProps) > 0 {
+		return formRequestBody(
+			"application/x-www-form-urlencoded", formProps,
+		)
+	}
+	if bodyField == nil {
+		return nil
+	}
+	return b.bodyRequestBody(*bodyField)
+}
+
+func formRequestBody(contentType string, props []formProperty) *RequestBody {
+	schema := &Schema{
+		Type:       "object",
+		Properties: map[string]*Schema{},
+	}
+	encodings := map[string]*Encoding{}
+	for _, p := range props {
+		schema.Properties[p.name] = p.schema
+		if p.required {
+			schema.Required = append(schema.Required, p.name)
+		}
+		if p.encoding != nil {
+			encodings[p.name] = p.encoding
+		}
+	}
+	mt := &MediaType{Schema: schema}
+	if len(encodings) > 0 {
+		mt.Encoding = encodings
+	}
+	return &RequestBody{
+		Required: true,
+		Content:  map[string]*MediaType{contentType: mt},
+	}
+}
+
+func (b *schemaBuilder) bodyRequestBody(f reflect.StructField) *RequestBody {
+	if f.Type == readerType || f.Type == bytesType {
+		types := splitContentTypes(f.Tag.Get("contentType"))
+		if len(types) == 0 {
+			types = []string{"application/octet-stream"}
+		}
+		content := map[string]*MediaType{}
+		for _, ct := range types {
+			content[ct] = &MediaType{
+				Schema: &Schema{Type: "string", Format: "binary"},
+			}
+		}
+		return &RequestBody{Required: true, Content: content}
+	}
+	return &RequestBody{
+		Required: true,
+		Content: map[string]*MediaType{
+			"application/json": {Schema: b.schema(f.Type)},
+		},
+	}
+}
+
+// fileSchema returns the JSON Schema fragment for a `file:` field: a
+// binary string for single files, an array of binary strings for repeated
+// uploads.
+func fileSchema(t reflect.Type) *Schema {
+	if t == fileHeaderSlcType {
+		return &Schema{
+			Type:  "array",
+			Items: &Schema{Type: "string", Format: "binary"},
+		}
+	}
+	return &Schema{Type: "string", Format: "binary"}
+}
+
+// encodingFromTag pulls a `contentType:"..."` tag off a file field and
+// renders it as an OAS Encoding Object. Returns nil when the tag is
+// absent so we can omit the encoding map entirely.
+func encodingFromTag(f reflect.StructField) *Encoding {
+	raw := f.Tag.Get("contentType")
+	types := splitContentTypes(raw)
+	if len(types) == 0 {
+		return nil
+	}
+	return &Encoding{ContentType: strings.Join(types, ", ")}
+}
+
+// isRequiredKind decides whether a form: field belongs in the object
+// schema's required array. Pointers and slices are optional; everything
+// else (scalars, named structs) is required.
+func isRequiredKind(t reflect.Type) bool {
+	switch t.Kind() {
+	case reflect.Ptr, reflect.Slice:
+		return false
+	}
+	return true
+}
+
+func splitContentTypes(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // buildResponses turns the explicit Returns[T] declarations into the

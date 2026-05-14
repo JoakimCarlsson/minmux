@@ -92,6 +92,95 @@ r.Post("/users", func(c *router.Context, p CreateParams) {
 
 Invalid JSON returns a 400 ProblemDetails automatically.
 
+## Forms and file uploads
+
+Two additional tags cover form-encoded payloads and uploads. They share
+the same flat-struct binding model as the rest of the framework, and the
+OpenAPI generator emits the matching request body shape for each.
+
+`form:"<name>"` binds a single form field (text part). Use it on scalar
+Go types or scalar slices:
+
+```go
+type LoginParams struct {
+    Username string `form:"username"`
+    Password string `form:"password" format:"password"`
+    Remember *bool  `form:"remember"`
+}
+
+r.Post("/login", func(c *router.Context, p LoginParams) {
+    // p.Username, p.Password set from the form; p.Remember is nil if omitted.
+})
+```
+
+A Params struct containing only `form:` fields is bound from an
+`application/x-www-form-urlencoded` request and generates a requestBody
+with the same content type.
+
+`file:"<name>"` binds a multipart file part. Use `*router.FormFile` for a
+single upload or `[]*router.FormFile` to accept multiple files under the
+same field name:
+
+```go
+type ProfileParams struct {
+    DisplayName string             `form:"display_name"`
+    Avatar      *router.FormFile   `file:"avatar"  contentType:"image/png, image/jpeg"`
+    Photos      []*router.FormFile `file:"photos"`
+}
+
+r.Post("/profile", func(c *router.Context, p ProfileParams) {
+    f, _ := p.Avatar.Open()
+    defer f.Close()
+    // p.Avatar.Filename, p.Avatar.Size, p.Avatar.Header.Get("Content-Type")
+})
+```
+
+`router.FormFile` is an alias for `multipart.FileHeader`, so you call
+the stdlib `Open` method to read the contents. The optional
+`contentType:"..."` tag is enforced at request time (mismatches return a
+400 ProblemDetails) and becomes an OAS 3.2 Encoding Object on the
+generated multipart schema.
+
+A Params struct containing any `file:` field is bound from a
+`multipart/form-data` request and any `form:` fields in the same struct
+become text parts on the same multipart body.
+
+The `body:""` tag also accepts raw streams. When the field type is
+`io.Reader` the request body is handed to the handler unbuffered; when
+it is `[]byte` the body is buffered up to the router's max-memory cap:
+
+```go
+type RawUploadParams struct {
+    Body io.Reader `body:"" contentType:"image/png, image/jpeg"`
+}
+
+r.Post("/raw", func(c *router.Context, p RawUploadParams) {
+    n, _ := io.Copy(os.Stdout, p.Body)
+    c.JSON(http.StatusOK, map[string]any{"bytes": n})
+})
+```
+
+The generated requestBody emits one content-type entry per value in the
+`contentType` tag, defaulting to `application/octet-stream` when the tag
+is absent.
+
+`form`/`file` fields are required by default; pointer and slice fields
+are optional. Missing required fields return a 400 ProblemDetails.
+
+Mixing `body:""` with `form:` or `file:` in the same Params struct is a
+registration error — pick one request shape per endpoint.
+
+The in-memory multipart cap and `[]byte` body cap are both controlled by
+a single router option:
+
+```go
+r := router.New(router.WithMaxMultipartMemory(16 << 20)) // 16 MiB
+```
+
+The default is 32 MiB. Multipart parts larger than the cap are spilled
+to a temp file on disk by `mime/multipart`; the cap on `[]byte` body
+fields is strict — oversize requests get a 400 ProblemDetails.
+
 ## Field formats
 
 Numeric Go types map automatically to OAS 3.2 formats: `int32`/`uint32`

@@ -11,6 +11,14 @@ type handlerInfo struct {
 	paramType reflect.Type
 }
 
+// bindConfig is the per-router state the binder needs at request time:
+// the codec for JSON body decode, the cap for multipart and []byte body
+// reads. Threaded through register -> buildDispatcher -> buildBinder.
+type bindConfig struct {
+	codec              Codec
+	maxMultipartMemory int64
+}
+
 var contextPtrType = reflect.TypeOf((*Context)(nil))
 
 // buildDispatcher reflects on the handler function once at registration and
@@ -19,7 +27,7 @@ var contextPtrType = reflect.TypeOf((*Context)(nil))
 // directly via *Context; they have no return value.
 func buildDispatcher(
 	handler any,
-	codec Codec,
+	cfg bindConfig,
 ) (http.HandlerFunc, *handlerInfo, error) {
 	hv := reflect.ValueOf(handler)
 	if !hv.IsValid() {
@@ -59,7 +67,7 @@ func buildDispatcher(
 				"params arg must be a struct, got %s", info.paramType.Kind(),
 			)
 		}
-		b, err := buildBinder(info.paramType, codec)
+		b, err := buildBinder(info.paramType, cfg)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -67,7 +75,7 @@ func buildDispatcher(
 	}
 
 	dispatch := func(w http.ResponseWriter, r *http.Request) {
-		c := &Context{Writer: w, Request: r, codec: codec}
+		c := &Context{Writer: w, Request: r, codec: cfg.codec}
 		args := []reflect.Value{reflect.ValueOf(c)}
 		if binder != nil {
 			pv, err := binder(r)

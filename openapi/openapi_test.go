@@ -2,8 +2,10 @@ package openapi
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -594,6 +596,156 @@ func TestSpec_JSONFieldOrder(t *testing.T) {
 			s,
 		)
 	}
+}
+
+type urlencodedLoginParams struct {
+	Username string `form:"username"`
+	Password string `form:"password" format:"password"`
+	Remember *bool  `form:"remember"`
+}
+
+type multipartUploadParams struct {
+	Title  string             `form:"title"`
+	Avatar *router.FormFile   `             file:"avatar" contentType:"image/png, image/jpeg"`
+	Photos []*router.FormFile `             file:"photos"`
+	Note   *string            `form:"note"`
+}
+
+type rawStreamParams struct {
+	Body io.Reader `body:"" contentType:"image/png, image/jpeg"`
+}
+
+type rawBytesParams struct {
+	Body []byte `body:""`
+}
+
+func TestSpec_UrlencodedForm(t *testing.T) {
+	r := router.New()
+	r.Post("/login", noopP[urlencodedLoginParams])
+	op := operation(t, r, "/login", "POST")
+
+	body := op.RequestBody
+	if body == nil {
+		t.Fatal("missing requestBody")
+	}
+	mt, ok := body.Content["application/x-www-form-urlencoded"]
+	if !ok {
+		t.Fatalf(
+			"want application/x-www-form-urlencoded, got %v",
+			contentKeys(body.Content),
+		)
+	}
+	if mt.Schema.Type != "object" {
+		t.Errorf("schema type: %q", mt.Schema.Type)
+	}
+	if got := mt.Schema.Properties["password"]; got == nil ||
+		got.Format != "password" {
+		t.Errorf("password property: %+v", got)
+	}
+	required := append([]string(nil), mt.Schema.Required...)
+	sort.Strings(required)
+	want := []string{"password", "username"}
+	if !reflect.DeepEqual(required, want) {
+		t.Errorf("required: want %v, got %v", want, required)
+	}
+}
+
+func TestSpec_MultipartForm(t *testing.T) {
+	r := router.New()
+	r.Post("/upload", noopP[multipartUploadParams])
+	op := operation(t, r, "/upload", "POST")
+
+	body := op.RequestBody
+	if body == nil {
+		t.Fatal("missing requestBody")
+	}
+	mt, ok := body.Content["multipart/form-data"]
+	if !ok {
+		t.Fatalf(
+			"want multipart/form-data, got %v",
+			contentKeys(body.Content),
+		)
+	}
+	props := mt.Schema.Properties
+	if got := props["avatar"]; got == nil ||
+		got.Type != "string" || got.Format != "binary" {
+		t.Errorf("avatar property: %+v", got)
+	}
+	if got := props["photos"]; got == nil ||
+		got.Type != "array" ||
+		got.Items.Type != "string" || got.Items.Format != "binary" {
+		t.Errorf("photos property: %+v", got)
+	}
+	if got := props["title"]; got == nil || got.Type != "string" {
+		t.Errorf("title property: %+v", got)
+	}
+	required := append([]string(nil), mt.Schema.Required...)
+	sort.Strings(required)
+	want := []string{"avatar", "title"}
+	if !reflect.DeepEqual(required, want) {
+		t.Errorf("required: want %v, got %v", want, required)
+	}
+	if mt.Encoding == nil || mt.Encoding["avatar"] == nil {
+		t.Fatalf("avatar encoding missing: %+v", mt.Encoding)
+	}
+	if mt.Encoding["avatar"].ContentType != "image/png, image/jpeg" {
+		t.Errorf("avatar contentType: %q", mt.Encoding["avatar"].ContentType)
+	}
+	if _, ok := mt.Encoding["photos"]; ok {
+		t.Errorf("photos should have no encoding entry, got %+v", mt.Encoding)
+	}
+}
+
+func TestSpec_OctetStreamReader(t *testing.T) {
+	r := router.New()
+	r.Post("/upload-raw", noopP[rawStreamParams])
+	op := operation(t, r, "/upload-raw", "POST")
+
+	body := op.RequestBody
+	if body == nil {
+		t.Fatal("missing requestBody")
+	}
+	keys := contentKeys(body.Content)
+	sort.Strings(keys)
+	want := []string{"image/jpeg", "image/png"}
+	if !reflect.DeepEqual(keys, want) {
+		t.Errorf("content keys: want %v, got %v", want, keys)
+	}
+	for _, k := range keys {
+		s := body.Content[k].Schema
+		if s.Type != "string" || s.Format != "binary" {
+			t.Errorf("%s schema: %+v", k, s)
+		}
+	}
+}
+
+func TestSpec_OctetStreamBytesDefault(t *testing.T) {
+	r := router.New()
+	r.Post("/upload-bytes", noopP[rawBytesParams])
+	op := operation(t, r, "/upload-bytes", "POST")
+
+	body := op.RequestBody
+	if body == nil {
+		t.Fatal("missing requestBody")
+	}
+	mt, ok := body.Content["application/octet-stream"]
+	if !ok {
+		t.Fatalf(
+			"want application/octet-stream, got %v",
+			contentKeys(body.Content),
+		)
+	}
+	if mt.Schema.Type != "string" || mt.Schema.Format != "binary" {
+		t.Errorf("schema: %+v", mt.Schema)
+	}
+}
+
+func contentKeys(m map[string]*MediaType) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
 }
 
 func operation(t *testing.T, r *router.Router, path, method string) *Operation {

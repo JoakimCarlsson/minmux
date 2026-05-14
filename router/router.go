@@ -6,12 +6,19 @@ import (
 	"strings"
 )
 
+// defaultMaxMultipartMemory matches http.defaultMaxMemory: the in-memory
+// buffer cap used when parsing multipart/form-data and the read cap used for
+// raw []byte body fields. Files larger than this are spilled to a temp file
+// by mime/multipart.
+const defaultMaxMultipartMemory int64 = 32 << 20
+
 // Router is the entry point of a minmux app. It implements http.Handler.
 type Router struct {
-	mux        *http.ServeMux
-	middleware []func(http.Handler) http.Handler
-	endpoints  []*Endpoint
-	codec      Codec
+	mux                *http.ServeMux
+	middleware         []func(http.Handler) http.Handler
+	endpoints          []*Endpoint
+	codec              Codec
+	maxMultipartMemory int64
 }
 
 // RouterOption configures a Router at construction time.
@@ -22,11 +29,20 @@ func WithCodec(c Codec) RouterOption {
 	return func(r *Router) { r.codec = c }
 }
 
+// WithMaxMultipartMemory caps the in-memory buffer used when parsing
+// multipart/form-data bodies and the read limit applied to []byte body
+// fields. Defaults to 32 MiB. Larger multipart parts are spilled to a
+// temporary file on disk by mime/multipart.
+func WithMaxMultipartMemory(n int64) RouterOption {
+	return func(r *Router) { r.maxMultipartMemory = n }
+}
+
 // New constructs a Router.
 func New(opts ...RouterOption) *Router {
 	r := &Router{
-		mux:   http.NewServeMux(),
-		codec: jsonCodec{},
+		mux:                http.NewServeMux(),
+		codec:              jsonCodec{},
+		maxMultipartMemory: defaultMaxMultipartMemory,
 	}
 	for _, opt := range opts {
 		opt(r)
@@ -122,7 +138,10 @@ func (r *Router) register(
 	opts []Option,
 ) *Endpoint {
 	full := joinPath(groupPrefix(g), path)
-	dispatch, info, err := buildDispatcher(handler, r.codec)
+	dispatch, info, err := buildDispatcher(handler, bindConfig{
+		codec:              r.codec,
+		maxMultipartMemory: r.maxMultipartMemory,
+	})
 	if err != nil {
 		panic(fmt.Sprintf("minmux: %s %s: %v", method, full, err))
 	}

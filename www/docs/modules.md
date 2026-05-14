@@ -10,7 +10,7 @@ You install only the modules you use.
 
 | Module | Purpose |
 |---|---|
-| `router` | Routing, parameter binding, response context helpers, ProblemDetails. Built on `net/http`. Zero external dependencies. |
+| `router` | Routing, parameter binding (path / query / header / form / file / body), response context helpers, ProblemDetails, multipart and raw-stream uploads. Built on `net/http`. Zero external dependencies. |
 
 ## Documentation
 

@@ -1,17 +1,3 @@
-// Package main is a smoke-test example for the openapi schema generator.
-// It exposes a handful of endpoints whose parameter / body / response
-// types deliberately cover every Go primitive plus the common OAS
-// registered string formats, so the generated /openapi.json can be
-// inspected to confirm the type-and-format mapping is correct.
-//
-// Run:
-//
-//	cd examples/types-showcase
-//	go run .
-//
-// Then:
-//
-//	curl http://localhost:8080/openapi.json | jq
 package main
 
 import (
