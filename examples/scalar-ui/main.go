@@ -339,6 +339,9 @@ func main() {
 	pets.Get(
 		"",
 		listPets,
+		// Auto-derived id would be "getPets"; override for a nicer
+		// generated client method name.
+		openapi.OperationID("listPets"),
 		openapi.Summary("List pets"),
 		openapi.Description(
 			"Filter by ?tag=, page with ?limit=, propagate X-Trace-Id.",

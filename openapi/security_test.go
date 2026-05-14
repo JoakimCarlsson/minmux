@@ -327,7 +327,10 @@ func TestOperation_NoSecurityInJSON(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 	s := string(raw)
-	if !strings.Contains(s, `"/inherit":{"get":{"responses"`) {
+	if !strings.Contains(
+		s,
+		`"/inherit":{"get":{"operationId":"getInherit","responses"`,
+	) {
 		t.Errorf(
 			"/inherit must omit security to inherit doc-level default: %s",
 			s,
@@ -335,13 +338,13 @@ func TestOperation_NoSecurityInJSON(t *testing.T) {
 	}
 	if !strings.Contains(
 		s,
-		`"/with":{"get":{"responses":{"default":{"description":"Default response"}},"security":[{"bearerAuth":[]}]}}`,
+		`"/with":{"get":{"operationId":"getWith","responses":{"default":{"description":"Default response"}},"security":[{"bearerAuth":[]}]}}`,
 	) {
 		t.Errorf("/with should carry single bearerAuth requirement: %s", s)
 	}
 	if !strings.Contains(
 		s,
-		`"/without":{"get":{"responses":{"default":{"description":"Default response"}},"security":[]}}`,
+		`"/without":{"get":{"operationId":"getWithout","responses":{"default":{"description":"Default response"}},"security":[]}}`,
 	) {
 		t.Errorf("/without should carry explicit empty security: %s", s)
 	}

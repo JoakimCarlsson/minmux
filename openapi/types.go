@@ -53,6 +53,7 @@ type Operation struct {
 	Tags        []string               `json:"tags,omitempty"`
 	Summary     string                 `json:"summary,omitempty"`
 	Description string                 `json:"description,omitempty"`
+	OperationID string                 `json:"operationId,omitempty"`
 	Deprecated  bool                   `json:"deprecated,omitempty"`
 	Parameters  []*Parameter           `json:"parameters,omitempty"`
 	RequestBody *RequestBody           `json:"requestBody,omitempty"`

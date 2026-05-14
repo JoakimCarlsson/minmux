@@ -106,6 +106,38 @@ Renderers like Scalar and Swagger UI style deprecated parameters and
 operations distinctly (strikethrough, banner) so consumers see them at a
 glance.
 
+## operationId
+
+Every operation in the generated spec carries an `operationId` — the
+stable identifier client generators use to name the corresponding method
+(`getPetById`, `listPets`, etc.). minmux derives one automatically from
+the HTTP method and route path:
+
+| Route | Derived `operationId` |
+|---|---|
+| `GET /pets` | `getPets` |
+| `POST /pets` | `postPets` |
+| `GET /pets/{id}` | `getPetsById` |
+| `POST /users/me/password` | `postUsersMePassword` |
+| `GET /streams/logs.jsonl` | `getStreamsLogsJsonl` |
+
+Non-alphanumeric characters in path segments (`.`, `-`) become word
+breaks so the result is always a valid identifier.
+
+Override the derived name with `openapi.OperationID(...)` when you want
+a nicer generated client method name or to lock the public client API
+against incidental route renames:
+
+```go
+r.Get("/pets", listPets,
+    openapi.OperationID("listPets"), // overrides the derived "getPets"
+)
+```
+
+`operationId` must be unique per document. The default derivation is
+collision-free by construction (method+path is unique on a router); if
+you override, the burden of uniqueness moves to you.
+
 ## Request body
 
 `body:""` on a struct field decodes the entire JSON body into it:

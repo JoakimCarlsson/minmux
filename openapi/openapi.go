@@ -130,10 +130,15 @@ func newSchemaBuilder() *schemaBuilder {
 
 func (b *schemaBuilder) buildOperation(ep *router.Endpoint) *Operation {
 	m := readMeta(ep)
+	opID := m.OperationID
+	if opID == "" {
+		opID = deriveOperationID(ep.Method, ep.Path)
+	}
 	op := &Operation{
 		Tags:        m.Tags,
 		Summary:     m.Summary,
 		Description: m.Description,
+		OperationID: opID,
 		Deprecated:  m.Deprecated,
 		Responses:   b.buildResponses(m),
 		Security:    operationSecurity(m),
@@ -172,6 +177,86 @@ func fillMissingPathParams(path string, params []*Parameter) []*Parameter {
 		declared[name] = true
 	}
 	return params
+}
+
+// deriveOperationID builds a default operationId from an HTTP method and
+// a route path. Static segments are appended in camelCase; templated
+// segments like "{id}" become "ById". Wildcard "{name...}" is treated as
+// "{name}"; the "{$}" end-of-path anchor is skipped.
+//
+//	GET  /pets             -> getPets
+//	GET  /pets/{id}        -> getPetsById
+//	POST /users/me/password -> postUsersMePassword
+//	GET  /files/{path...}  -> getFilesByPath
+//
+// Uniqueness across the document is guaranteed by method + path being
+// unique on a router.
+func deriveOperationID(method, path string) string {
+	var b strings.Builder
+	b.WriteString(strings.ToLower(method))
+	for _, raw := range strings.Split(path, "/") {
+		if raw == "" {
+			continue
+		}
+		if strings.HasPrefix(raw, "{") && strings.HasSuffix(raw, "}") {
+			name := raw[1 : len(raw)-1]
+			if name == "$" {
+				continue
+			}
+			name = strings.TrimSuffix(name, "...")
+			if name == "" {
+				continue
+			}
+			b.WriteString("By")
+			b.WriteString(capitalize(name))
+			continue
+		}
+		b.WriteString(capitalize(raw))
+	}
+	return b.String()
+}
+
+// capitalize uppercases the first rune of s and leaves the rest alone.
+// Empty input returns empty. Used by deriveOperationID so segments like
+// "pets" become "Pets" without lowercasing camelCase segments the user
+// may have used in their route ("petStore" stays "PetStore").
+func capitalize(s string) string {
+	s = sanitizeSegment(s)
+	if s == "" {
+		return s
+	}
+	first := s[0]
+	if first >= 'a' && first <= 'z' {
+		first -= 'a' - 'A'
+	}
+	return string(first) + s[1:]
+}
+
+// sanitizeSegment normalizes a single path segment into a safe identifier
+// fragment: non-alphanumeric runes become word breaks that capitalize the
+// following character, and the rest is dropped. So "logs.jsonl" becomes
+// "logsJsonl" — operationIds remain valid identifiers in generated
+// clients even when paths contain dots, dashes, or other separators.
+func sanitizeSegment(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	upperNext := false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= 'a' && c <= 'z',
+			c >= 'A' && c <= 'Z',
+			c >= '0' && c <= '9':
+			if upperNext && c >= 'a' && c <= 'z' {
+				c -= 'a' - 'A'
+			}
+			b.WriteByte(c)
+			upperNext = false
+		default:
+			upperNext = b.Len() > 0
+		}
+	}
+	return b.String()
 }
 
 // pathTemplateNames returns the ordered list of variable names extracted

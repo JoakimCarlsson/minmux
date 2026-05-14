@@ -456,6 +456,87 @@ func TestSpec_ParamDeprecated(t *testing.T) {
 	}
 }
 
+func TestDeriveOperationID(t *testing.T) {
+	cases := []struct {
+		method, path, want string
+	}{
+		{"GET", "/pets", "getPets"},
+		{"GET", "/pets/{id}", "getPetsById"},
+		{"POST", "/pets", "postPets"},
+		{"DELETE", "/pets/{id}", "deletePetsById"},
+		{"GET", "/users/me", "getUsersMe"},
+		{"POST", "/users/me/password", "postUsersMePassword"},
+		{"GET", "/", "get"},
+		{"GET", "/files/{path...}", "getFilesByPath"},
+		{"GET", "/anchored/{$}", "getAnchored"},
+		{"GET", "/petStore/{petId}", "getPetStoreByPetId"},
+		{"GET", "/logs.jsonl", "getLogsJsonl"},
+		{"GET", "/v1/api/health-check", "getV1ApiHealthCheck"},
+	}
+	for _, c := range cases {
+		t.Run(c.method+" "+c.path, func(t *testing.T) {
+			got := deriveOperationID(c.method, c.path)
+			if got != c.want {
+				t.Errorf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestSpec_OperationIDAutoDerivedWhenUnset(t *testing.T) {
+	r := router.New()
+	r.Get("/pets/{id}", noop)
+	op := operation(t, r, "/pets/{id}", "GET")
+	if op.OperationID != "getPetsById" {
+		t.Errorf("operationId: got %q, want %q", op.OperationID, "getPetsById")
+	}
+}
+
+func TestSpec_OperationIDExplicitOverride(t *testing.T) {
+	r := router.New()
+	r.Get("/pets/{id}", noop, OperationID("fetchPet"))
+	op := operation(t, r, "/pets/{id}", "GET")
+	if op.OperationID != "fetchPet" {
+		t.Errorf("operationId: got %q, want %q", op.OperationID, "fetchPet")
+	}
+}
+
+func TestSpec_OperationIDsUniquePerDocument(t *testing.T) {
+	r := router.New()
+	r.Get("/pets", noop)
+	r.Post("/pets", noop)
+	r.Get("/pets/{id}", noop)
+	r.Delete("/pets/{id}", noop)
+
+	doc := NewGenerator(Info{Title: "T", Version: "1"}).Spec(r)
+
+	seen := map[string]string{}
+	for path, item := range doc.Paths {
+		ops := map[string]*Operation{
+			"GET":    item.Get,
+			"POST":   item.Post,
+			"DELETE": item.Delete,
+		}
+		for method, op := range ops {
+			if op == nil {
+				continue
+			}
+			id := op.OperationID
+			if id == "" {
+				t.Errorf("%s %s missing operationId", method, path)
+				continue
+			}
+			if prev, dup := seen[id]; dup {
+				t.Errorf(
+					"duplicate operationId %q on %s %s (also on %s)",
+					id, method, path, prev,
+				)
+			}
+			seen[id] = method + " " + path
+		}
+	}
+}
+
 func TestSpec_OperationDeprecated(t *testing.T) {
 	r := router.New()
 	r.Get("/old", noop, Deprecated(), Summary("legacy"))

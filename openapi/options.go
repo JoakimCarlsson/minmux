@@ -16,6 +16,7 @@ import (
 type endpointMeta struct {
 	Summary          string
 	Description      string
+	OperationID      string
 	Deprecated       bool
 	Tags             []string
 	Responses        []ResponseDecl
@@ -87,6 +88,18 @@ func Summary(s string) router.Option {
 // Description sets the operation's long-form description.
 func Description(s string) router.Option {
 	return func(ep *router.Endpoint) { writeMeta(ep).Description = s }
+}
+
+// OperationID sets the operation's operationId, the stable identifier
+// client generators use to name the corresponding method (e.g. "listPets",
+// "getPetById"). Must be unique across the document.
+//
+// When unset, the generator derives one from the HTTP method and the
+// route path — for example, `GET /pets/{id}` becomes `getPetsById`.
+// Override only when the derived name is wrong or you want to lock the
+// generated client API against incidental renames.
+func OperationID(id string) router.Option {
+	return func(ep *router.Endpoint) { writeMeta(ep).OperationID = id }
 }
 
 // Deprecated marks the operation as deprecated. Renderers (Scalar, Swagger
