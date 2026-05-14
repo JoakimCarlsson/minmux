@@ -319,8 +319,8 @@ func TestSpec_NoResponsesYieldsDefault(t *testing.T) {
 func TestSpec_ExplicitReturns(t *testing.T) {
 	r := router.New()
 	r.Get("/u", noop,
-		Returns[User](http.StatusOK, "User"),
-		Returns[router.ProblemDetails](http.StatusNotFound, "Not found"),
+		ReturnsBody[User](http.StatusOK, "User"),
+		ReturnsBody[router.ProblemDetails](http.StatusNotFound, "Not found"),
 	)
 	op := operation(t, r, "/u", "GET")
 
@@ -351,7 +351,7 @@ func TestSpec_ExplicitReturns(t *testing.T) {
 func TestSpec_ReturnsArray(t *testing.T) {
 	r := router.New()
 	r.Get("/u", noop,
-		Returns[[]User](http.StatusOK, "List of users"),
+		ReturnsBody[[]User](http.StatusOK, "List of users"),
 	)
 	op := operation(t, r, "/u", "GET")
 	schema := op.Responses["200"].Content["application/json"].Schema
@@ -421,8 +421,8 @@ func TestSpec_MultipleMethodsSamePath(t *testing.T) {
 
 func TestSpec_ComponentsAccumulate(t *testing.T) {
 	r := router.New()
-	r.Get("/u", noop, Returns[User](http.StatusOK, ""))
-	r.Get("/b", noop, Returns[Book](http.StatusOK, ""))
+	r.Get("/u", noop, ReturnsBody[User](http.StatusOK, ""))
+	r.Get("/b", noop, ReturnsBody[Book](http.StatusOK, ""))
 
 	spec := NewGenerator(Info{}).Spec(r)
 	if spec.Components == nil {
@@ -454,7 +454,7 @@ func TestSpec_EmptyComponentsNotEmitted(t *testing.T) {
 
 func TestSpec_JSONFieldOrder(t *testing.T) {
 	r := router.New()
-	r.Get("/u/{id}", noopP[pathParams], Returns[User](http.StatusOK, ""))
+	r.Get("/u/{id}", noopP[pathParams], ReturnsBody[User](http.StatusOK, ""))
 
 	raw, err := json.Marshal(
 		NewGenerator(Info{Title: "T", Version: "1"}).Spec(r),

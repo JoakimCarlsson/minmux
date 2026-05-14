@@ -15,7 +15,8 @@ type endpointMeta struct {
 	Responses   []ResponseDecl
 }
 
-// ResponseDecl is a single explicit response declaration with its body type.
+// ResponseDecl is a single explicit response declaration. BodyType is nil
+// when the response has no body (204 No Content, 304 Not Modified, etc.).
 type ResponseDecl struct {
 	Status      int
 	Description string
@@ -26,7 +27,6 @@ type ResponseDecl struct {
 // router.Endpoint.Metadata.
 type metaKey struct{}
 
-// writeMeta returns the endpoint's endpointMeta, creating one if missing.
 func writeMeta(ep *router.Endpoint) *endpointMeta {
 	if m, ok := ep.Metadata[metaKey{}].(*endpointMeta); ok {
 		return m
@@ -36,8 +36,6 @@ func writeMeta(ep *router.Endpoint) *endpointMeta {
 	return m
 }
 
-// readMeta returns the endpoint's endpointMeta, or an empty value if none
-// has been attached. Never modifies the endpoint.
 func readMeta(ep *router.Endpoint) *endpointMeta {
 	if m, ok := ep.Metadata[metaKey{}].(*endpointMeta); ok {
 		return m
@@ -63,11 +61,23 @@ func Tags(t ...string) router.Option {
 	}
 }
 
-// Returns declares an explicit response with body type T at the given
-// status code. Use this for non-success codes (404, 400, etc.) or to
-// override the default response inferred from the handler signature.
+// Returns declares a response with a status code and no body. Use this for
+// 204 No Content, 304 Not Modified, redirects, and any other status that
+// has no payload. Pass an empty description to use the standard HTTP
+// status text.
+func Returns(status int, description string) router.Option {
+	return func(ep *router.Endpoint) {
+		m := writeMeta(ep)
+		m.Responses = append(m.Responses, ResponseDecl{
+			Status:      status,
+			Description: description,
+		})
+	}
+}
+
+// ReturnsBody declares a response with a status code and a typed JSON body.
 // Pass an empty description to use the standard HTTP status text.
-func Returns[T any](status int, description string) router.Option {
+func ReturnsBody[T any](status int, description string) router.Option {
 	bodyType := reflect.TypeFor[T]()
 	return func(ep *router.Endpoint) {
 		m := writeMeta(ep)

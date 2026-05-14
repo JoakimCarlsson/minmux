@@ -145,15 +145,15 @@ func (a *API) Register(r *router.Router) {
 		openapi.Description(
 			"Return all todos. Filter by ?completed=true|false, bound by ?limit=N.",
 		),
-		openapi.Returns[[]Todo](http.StatusOK, "Todo list"),
+		openapi.ReturnsBody[[]Todo](http.StatusOK, "Todo list"),
 	)
 
 	todos.Get(
 		"/{id}",
 		a.Get,
 		openapi.Summary("Get a todo"),
-		openapi.Returns[Todo](http.StatusOK, "Todo found"),
-		openapi.Returns[router.ProblemDetails](
+		openapi.ReturnsBody[Todo](http.StatusOK, "Todo found"),
+		openapi.ReturnsBody[router.ProblemDetails](
 			http.StatusNotFound,
 			"Todo not found",
 		),
@@ -163,8 +163,8 @@ func (a *API) Register(r *router.Router) {
 		"",
 		a.Create,
 		openapi.Summary("Create a todo"),
-		openapi.Returns[Todo](http.StatusCreated, "Todo created"),
-		openapi.Returns[router.ProblemDetails](
+		openapi.ReturnsBody[Todo](http.StatusCreated, "Todo created"),
+		openapi.ReturnsBody[router.ProblemDetails](
 			http.StatusBadRequest,
 			"Invalid body",
 		),
@@ -177,12 +177,12 @@ func (a *API) Register(r *router.Router) {
 		openapi.Description(
 			"Partial update. Pass only the fields you want to change.",
 		),
-		openapi.Returns[Todo](http.StatusOK, "Todo updated"),
-		openapi.Returns[router.ProblemDetails](
+		openapi.ReturnsBody[Todo](http.StatusOK, "Todo updated"),
+		openapi.ReturnsBody[router.ProblemDetails](
 			http.StatusNotFound,
 			"Todo not found",
 		),
-		openapi.Returns[router.ProblemDetails](
+		openapi.ReturnsBody[router.ProblemDetails](
 			http.StatusBadRequest,
 			"Invalid body",
 		),
@@ -192,8 +192,8 @@ func (a *API) Register(r *router.Router) {
 		"/{id}",
 		a.Delete,
 		openapi.Summary("Delete a todo"),
-		openapi.Returns[any](http.StatusNoContent, "Todo deleted"),
-		openapi.Returns[router.ProblemDetails](
+		openapi.Returns(http.StatusNoContent, "Todo deleted"),
+		openapi.ReturnsBody[router.ProblemDetails](
 			http.StatusNotFound,
 			"Todo not found",
 		),
