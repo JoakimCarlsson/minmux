@@ -24,10 +24,10 @@ You install only the modules you use.
 |---|---|
 | `cors` | CORS middleware compatible with any `http.Handler`. Zero external dependencies. |
 
-## Planned
+## Caching
 
-Modules slated for follow-up releases:
-
-- `outputcache` — HTTP response caching with pluggable storage and
-  flexible cache key strategies.
-- `scalar` — Scalar docs UI for serving the generated OpenAPI spec.
+| Module | Purpose |
+|---|---|
+| `outputcache` | HTTP response caching with per-route opt-in, tags, sliding expiration, ETag revalidation, profiles. Depends on `router`. |
+| `outputcache/inmemory` | In-process `outputcache.Storage` backed by a concurrent map. Depends on `outputcache`. |
+| `outputcache/redis` | Redis-backed `outputcache.Storage` using `redis/go-redis/v9`. Depends on `outputcache`. |

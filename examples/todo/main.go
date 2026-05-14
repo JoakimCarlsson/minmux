@@ -10,6 +10,8 @@ import (
 
 	"github.com/joakimcarlsson/minmux/cors"
 	"github.com/joakimcarlsson/minmux/openapi"
+	"github.com/joakimcarlsson/minmux/outputcache"
+	"github.com/joakimcarlsson/minmux/outputcache/inmemory"
 	"github.com/joakimcarlsson/minmux/router"
 )
 
@@ -134,6 +136,7 @@ func (s *Store) Delete(id int) error {
 // API hangs handlers off a struct holding their shared dependencies.
 type API struct {
 	store *Store
+	cache *outputcache.Cache
 }
 
 func (a *API) Register(r *router.Router) {
@@ -147,6 +150,10 @@ func (a *API) Register(r *router.Router) {
 			"Return all todos. Filter by ?completed=true|false, bound by ?limit=N.",
 		),
 		openapi.ReturnsBody[[]Todo](http.StatusOK, "Todo list"),
+		outputcache.WithOutputCache(time.Minute,
+			outputcache.VaryByQuery("completed", "limit"),
+			outputcache.Tags("todos"),
+		),
 	)
 
 	todos.Get(
@@ -157,6 +164,9 @@ func (a *API) Register(r *router.Router) {
 		openapi.ReturnsBody[router.ProblemDetails](
 			http.StatusNotFound,
 			"Todo not found",
+		),
+		outputcache.WithOutputCache(time.Minute,
+			outputcache.Tags("todos"),
 		),
 	)
 
@@ -216,6 +226,7 @@ func (a *API) Get(c *router.Context, p GetTodoParams) {
 
 func (a *API) Create(c *router.Context, p CreateTodoParams) {
 	t := a.store.Create(p.Body)
+	a.cache.InvalidateTag("todos")
 	c.Header("Location", "/api/v1/todos/"+strconv.Itoa(t.ID))
 	c.JSON(http.StatusCreated, t)
 }
@@ -226,6 +237,7 @@ func (a *API) Update(c *router.Context, p UpdateTodoParams) {
 		c.JSON(http.StatusNotFound, router.NotFound("todo not found"))
 		return
 	}
+	a.cache.InvalidateTag("todos")
 	c.JSON(http.StatusOK, t)
 }
 
@@ -234,6 +246,7 @@ func (a *API) Delete(c *router.Context, p DeleteTodoParams) {
 		c.JSON(http.StatusNotFound, router.NotFound("todo not found"))
 		return
 	}
+	a.cache.InvalidateTag("todos")
 	c.NoContent()
 }
 
@@ -241,6 +254,14 @@ func main() {
 	api := &API{store: NewStore()}
 	r := router.New()
 	r.Use(cors.Default())
+
+	cache := outputcache.New(r, outputcache.Config{
+		Storage:         inmemory.New(),
+		DefaultDuration: time.Minute,
+	})
+	api.cache = cache
+	r.Use(cache.Middleware())
+
 	api.Register(r)
 
 	gen := openapi.NewGenerator(openapi.Info{

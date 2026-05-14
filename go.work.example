@@ -4,5 +4,8 @@ use (
 	./router
 	./openapi
 	./cors
+	./outputcache
+	./outputcache/inmemory
+	./outputcache/redis
 	./tests/cors-browser
 )

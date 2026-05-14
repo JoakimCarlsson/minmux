@@ -55,6 +55,23 @@ func (r *Router) Endpoints() []*Endpoint {
 	return r.endpoints
 }
 
+// Match returns the endpoint that would handle the request, or nil if the
+// request would 404 or matches only a raw handler. Used by annotation
+// consumers (e.g. outputcache) that need to look up per-endpoint metadata
+// from an incoming request.
+func (r *Router) Match(req *http.Request) *Endpoint {
+	_, pattern := r.mux.Handler(req)
+	if pattern == "" {
+		return nil
+	}
+	for _, ep := range r.endpoints {
+		if ep.Method+" "+ep.Path == pattern {
+			return ep
+		}
+	}
+	return nil
+}
+
 // Get registers a typed GET handler with optional annotations.
 func (r *Router) Get(path string, handler any, opts ...Option) *Endpoint {
 	return r.register(http.MethodGet, path, handler, nil, opts)
