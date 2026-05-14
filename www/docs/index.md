@@ -21,6 +21,13 @@ compatible. Ships as independent modules — pull only what you need.
   `openapi.ReturnsBody[T]`. Schemas for named struct types are hoisted into
   `components/schemas` and referenced via `$ref`. The spec is valid
   OpenAPI 3.2 with proper top-level field order.
+- **First-class streaming.** SSE, JSONL, NDJSON, JSON-seq, and
+  multipart/mixed all have matching `c.Stream` / `c.SSE` /
+  `c.MultipartMixed` runtime helpers plus `openapi.StreamsBody[T]` /
+  `openapi.SSEStream[T]` / `openapi.MultipartMixedStream[T]` options that
+  emit OAS 3.2 `itemSchema` / `itemEncoding` / `prefixEncoding`. Streaming
+  request bodies bind to `iter.Seq2[T, error]`. See
+  [Streaming](streaming.md).
 - **Multi-module.** `router` is the runtime, `openapi` is the spec
   generator. Independent versioning; the router has zero dependencies on
   the openapi package.

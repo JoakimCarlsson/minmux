@@ -10,13 +10,13 @@ You install only the modules you use.
 
 | Module | Purpose |
 |---|---|
-| `router` | Routing, parameter binding (path / query / header / form / file / body), response context helpers, ProblemDetails, multipart and raw-stream uploads. Built on `net/http`. Zero external dependencies. |
+| `router` | Routing, parameter binding (path / query / header / form / file / body), response context helpers, ProblemDetails, multipart and raw-stream uploads, plus first-class streaming response writers (`c.SSE`, `c.Stream`, `c.MultipartMixed`) and `iter.Seq2[T, error]` body binders for SSE / JSONL / JSON-seq / multipart/mixed inputs. Built on `net/http`. Zero external dependencies. |
 
 ## Documentation
 
 | Module | Purpose |
 |---|---|
-| `openapi` | OpenAPI 3.2 spec generation from explicit endpoint annotations, with auto-mapped numeric formats (int32/int64/float/double) and a `format:"..."` struct tag for string formats (email, password, uuid, ...). Depends on `router`. |
+| `openapi` | OpenAPI 3.2 spec generation from explicit endpoint annotations, with auto-mapped numeric formats (int32/int64/float/double), a `format:"..."` struct tag for string formats (email, password, uuid, ...), and streaming options (`StreamsBody[T]`, `SSEStream[T]`, `MultipartMixedStream[T]`) that emit `itemSchema` / `itemEncoding` / `prefixEncoding`. Depends on `router`. |
 
 ## Middleware
 

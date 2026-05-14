@@ -44,5 +44,6 @@ nav:
   - Getting Started:
     - Installation: getting-started/installation.md
     - Quick Start: getting-started/quick-start.md
+  - Streaming: streaming.md
   - Caching:
     - Output Cache: caching/outputcache.md

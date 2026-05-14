@@ -280,6 +280,12 @@ Two annotation functions describe responses:
 The signature of the handler has no effect on the generated spec — what
 you declare with `Returns` / `ReturnsBody` is what appears.
 
+For streaming responses (SSE, JSONL, NDJSON, JSON-seq, multipart/mixed),
+use the dedicated `openapi.StreamsBody[T]`, `openapi.SSEStream[T]`, and
+`openapi.MultipartMixedStream[T]` options paired with the matching
+`c.Stream` / `c.SSE` / `c.MultipartMixed` runtime helpers — see the
+[Streaming](../streaming.md) page.
+
 ## Full example
 
 `examples/todo/` is a runnable Todo API exercising every feature:

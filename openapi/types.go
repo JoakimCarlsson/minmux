@@ -53,16 +53,33 @@ type Response struct {
 }
 
 // MediaType is the body shape for a single content type (e.g. application/json).
+//
+// OAS 3.2 adds itemSchema (applied per-item in sequential media types such as
+// application/jsonl, application/json-seq, text/event-stream, multipart/mixed),
+// and itemEncoding / prefixEncoding for positional multipart streams.
 type MediaType struct {
-	Schema   *Schema              `json:"schema,omitempty"`
-	Encoding map[string]*Encoding `json:"encoding,omitempty"`
+	Schema         *Schema              `json:"schema,omitempty"`
+	ItemSchema     *Schema              `json:"itemSchema,omitempty"`
+	Encoding       map[string]*Encoding `json:"encoding,omitempty"`
+	PrefixEncoding []*Encoding          `json:"prefixEncoding,omitempty"`
+	ItemEncoding   *Encoding            `json:"itemEncoding,omitempty"`
 }
 
-// Encoding is the OAS 3.2 Encoding Object used by multipart and
-// x-www-form-urlencoded media types to attach per-property metadata such
-// as an allowed Content-Type list.
+// Encoding is the OAS 3.2 Encoding Object used by form, multipart, and
+// multipart/mixed media types to attach per-property or per-position
+// metadata such as an allowed Content-Type list, custom Headers, and
+// (for nested multipart) further positional encoding rules.
 type Encoding struct {
-	ContentType string `json:"contentType,omitempty"`
+	ContentType    string             `json:"contentType,omitempty"`
+	Headers        map[string]*Header `json:"headers,omitempty"`
+	PrefixEncoding []*Encoding        `json:"prefixEncoding,omitempty"`
+	ItemEncoding   *Encoding          `json:"itemEncoding,omitempty"`
+}
+
+// Header describes a fixed header on a multipart part. Only Schema is emitted
+// today; extend as more fields are needed.
+type Header struct {
+	Schema *Schema `json:"schema,omitempty"`
 }
 
 // Components is the document's reusable-definitions block.
@@ -72,6 +89,10 @@ type Components struct {
 
 // Schema is a JSON Schema 2020-12 fragment. Only the fields minmux emits are
 // defined here; extend as needed.
+//
+// OAS 3.2 streaming use cases pull in oneOf/const for SSE event-name dispatch
+// and contentMediaType/contentSchema for validating JSON-in-string fields
+// (e.g. the SSE data field).
 type Schema struct {
 	Ref                  string             `json:"$ref,omitempty"`
 	Type                 string             `json:"type,omitempty"`
@@ -81,4 +102,8 @@ type Schema struct {
 	Required             []string           `json:"required,omitempty"`
 	Items                *Schema            `json:"items,omitempty"`
 	AdditionalProperties *Schema            `json:"additionalProperties,omitempty"`
+	OneOf                []*Schema          `json:"oneOf,omitempty"`
+	Const                any                `json:"const,omitempty"`
+	ContentMediaType     string             `json:"contentMediaType,omitempty"`
+	ContentSchema        *Schema            `json:"contentSchema,omitempty"`
 }

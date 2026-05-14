@@ -19,6 +19,8 @@ var (
 	bytesType         = reflect.TypeFor[[]byte]()
 	fileHeaderPtrType = reflect.TypeFor[*multipart.FileHeader]()
 	fileHeaderSlcType = reflect.TypeFor[[]*multipart.FileHeader]()
+	errorType         = reflect.TypeFor[error]()
+	sseEventType      = reflect.TypeFor[router.SSEEvent]()
 )
 
 // Info is the OpenAPI document info block.
@@ -261,12 +263,81 @@ func (b *schemaBuilder) bodyRequestBody(f reflect.StructField) *RequestBody {
 		}
 		return &RequestBody{Required: true, Content: content}
 	}
+	if item, ok := iterSeq2ItemType(f.Type); ok {
+		return b.iterRequestBody(
+			item,
+			splitContentTypes(f.Tag.Get("contentType")),
+		)
+	}
 	return &RequestBody{
 		Required: true,
 		Content: map[string]*MediaType{
 			"application/json": {Schema: b.schema(f.Type)},
 		},
 	}
+}
+
+// iterRequestBody builds a streaming request body for iter.Seq2[T, error]
+// fields. SSE input emits the canonical SSE event schema, multipart/mixed
+// input emits an empty media type (parts have heterogeneous types), and
+// sequential JSON inputs emit itemSchema: schema(T).
+func (b *schemaBuilder) iterRequestBody(
+	item reflect.Type,
+	contentTypes []string,
+) *RequestBody {
+	if len(contentTypes) == 0 {
+		contentTypes = []string{"application/jsonl"}
+	}
+	content := map[string]*MediaType{}
+	for _, ct := range contentTypes {
+		switch normalizeMediaType(ct) {
+		case "text/event-stream":
+			var t reflect.Type
+			if item != sseEventType {
+				t = item
+			}
+			content[ct] = &MediaType{ItemSchema: b.sseEventSchema(t)}
+		case "multipart/mixed", "multipart/byteranges":
+			content[ct] = &MediaType{}
+		default:
+			content[ct] = &MediaType{ItemSchema: b.schema(item)}
+		}
+	}
+	return &RequestBody{Required: true, Content: content}
+}
+
+// iterSeq2ItemType returns T and true when t is iter.Seq2[T, error] (which
+// in Go's type system is a func(yield func(T, error) bool) value). Kept in
+// sync with the router-side detector in router/bind.go.
+func iterSeq2ItemType(t reflect.Type) (reflect.Type, bool) {
+	if t.Kind() != reflect.Func {
+		return nil, false
+	}
+	if t.NumIn() != 1 || t.NumOut() != 0 {
+		return nil, false
+	}
+	yield := t.In(0)
+	if yield.Kind() != reflect.Func {
+		return nil, false
+	}
+	if yield.NumIn() != 2 || yield.NumOut() != 1 {
+		return nil, false
+	}
+	if yield.Out(0).Kind() != reflect.Bool {
+		return nil, false
+	}
+	if yield.In(1) != errorType {
+		return nil, false
+	}
+	return yield.In(0), true
+}
+
+// normalizeMediaType strips parameters and lowercases a media type.
+func normalizeMediaType(ct string) string {
+	if i := strings.IndexByte(ct, ';'); i >= 0 {
+		ct = ct[:i]
+	}
+	return strings.ToLower(strings.TrimSpace(ct))
 }
 
 // fileSchema returns the JSON Schema fragment for a `file:` field: a
@@ -323,9 +394,10 @@ func splitContentTypes(raw string) []string {
 	return out
 }
 
-// buildResponses turns the explicit Returns[T] declarations into the
-// responses block. Endpoints with no declared responses get a "default"
-// placeholder so the document remains a valid OpenAPI spec.
+// buildResponses turns the explicit Returns[T] / StreamsBody[T] / SSEStream[T]
+// / MultipartMixedStream[T] declarations into the responses block. Endpoints
+// with no declared responses get a "default" placeholder so the document
+// remains a valid OpenAPI spec.
 func (b *schemaBuilder) buildResponses(m *endpointMeta) map[string]*Response {
 	if len(m.Responses) == 0 {
 		return map[string]*Response{
@@ -338,22 +410,78 @@ func (b *schemaBuilder) buildResponses(m *endpointMeta) map[string]*Response {
 		if desc == "" {
 			desc = http.StatusText(decl.Status)
 		}
-		out[strconv.Itoa(decl.Status)] = b.responseFromType(decl.BodyType, desc)
+		out[strconv.Itoa(decl.Status)] = b.responseFromDecl(decl, desc)
 	}
 	return out
 }
 
-func (b *schemaBuilder) responseFromType(
-	t reflect.Type,
+func (b *schemaBuilder) responseFromDecl(
+	decl ResponseDecl,
 	desc string,
 ) *Response {
 	r := &Response{Description: desc}
-	if t != nil {
+	switch decl.StreamKind {
+	case streamSequential:
+		r.Content = map[string]*MediaType{}
+		var itemSchema *Schema
+		if decl.ItemType != nil {
+			itemSchema = b.schema(decl.ItemType)
+		}
+		for _, ct := range decl.ContentTypes {
+			r.Content[ct] = &MediaType{ItemSchema: itemSchema}
+		}
+	case streamSSE:
 		r.Content = map[string]*MediaType{
-			"application/json": {Schema: b.schema(t)},
+			"text/event-stream": {
+				ItemSchema: b.sseEventSchema(decl.ItemType),
+			},
+		}
+	case streamMultipartMixed:
+		mt := &MediaType{}
+		if decl.ItemType != nil {
+			mt.ItemSchema = b.schema(decl.ItemType)
+		} else {
+			mt.ItemSchema = &Schema{}
+		}
+		if decl.ItemEncoding != nil {
+			mt.ItemEncoding = decl.ItemEncoding
+		} else {
+			mt.ItemEncoding = &Encoding{ContentType: "application/octet-stream"}
+		}
+		if len(decl.PrefixParts) > 0 {
+			mt.PrefixEncoding = append([]*Encoding(nil), decl.PrefixParts...)
+		}
+		r.Content = map[string]*MediaType{"multipart/mixed": mt}
+	default:
+		if decl.BodyType != nil {
+			r.Content = map[string]*MediaType{
+				"application/json": {Schema: b.schema(decl.BodyType)},
+			}
 		}
 	}
 	return r
+}
+
+// sseEventSchema builds the canonical text/event-stream event schema from
+// OAS 3.2 §4.14.4. When itemType is non-nil, the data property is annotated
+// with contentMediaType: application/json + contentSchema: schema(itemType)
+// to indicate the data field carries a JSON payload of that shape.
+func (b *schemaBuilder) sseEventSchema(itemType reflect.Type) *Schema {
+	data := &Schema{Type: "string"}
+	if itemType != nil {
+		data.ContentMediaType = "application/json"
+		data.ContentSchema = b.schema(itemType)
+	}
+	return &Schema{
+		Type:     "object",
+		Required: []string{"data"},
+		Properties: map[string]*Schema{
+			"data":  data,
+			"event": {Type: "string"},
+			"id":    {Type: "string"},
+			"retry": {Type: "integer", Minimum: zero()},
+		},
+	}
 }
 
 // schema returns the JSON Schema for t. Named user struct types are hoisted
