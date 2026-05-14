@@ -134,6 +134,7 @@ func (b *schemaBuilder) buildOperation(ep *router.Endpoint) *Operation {
 		Tags:        m.Tags,
 		Summary:     m.Summary,
 		Description: m.Description,
+		Deprecated:  m.Deprecated,
 		Responses:   b.buildResponses(m),
 		Security:    operationSecurity(m),
 	}
@@ -240,26 +241,31 @@ func (b *schemaBuilder) buildParams(
 		}
 		if v, ok := f.Tag.Lookup("path"); ok {
 			params = append(params, &Parameter{
-				Name:     v,
-				In:       "path",
-				Required: true,
-				Schema:   applyFieldFormat(b.schema(f.Type), f),
+				Name:       v,
+				In:         "path",
+				Required:   true,
+				Deprecated: fieldDeprecated(f),
+				Schema:     applyFieldFormat(b.schema(f.Type), f),
 			})
 			continue
 		}
 		if v, ok := f.Tag.Lookup("query"); ok {
 			params = append(params, &Parameter{
-				Name:   v,
-				In:     "query",
-				Schema: applyFieldFormat(b.schema(f.Type), f),
+				Name:       v,
+				In:         "query",
+				Required:   isRequiredKind(f.Type),
+				Deprecated: fieldDeprecated(f),
+				Schema:     applyFieldFormat(b.schema(f.Type), f),
 			})
 			continue
 		}
 		if v, ok := f.Tag.Lookup("header"); ok {
 			params = append(params, &Parameter{
-				Name:   v,
-				In:     "header",
-				Schema: applyFieldFormat(b.schema(f.Type), f),
+				Name:       v,
+				In:         "header",
+				Required:   isRequiredKind(f.Type),
+				Deprecated: fieldDeprecated(f),
+				Schema:     applyFieldFormat(b.schema(f.Type), f),
 			})
 			continue
 		}
@@ -668,4 +674,15 @@ func applyFieldFormat(s *Schema, f reflect.StructField) *Schema {
 		s.Format = v
 	}
 	return s
+}
+
+// fieldDeprecated reports whether a parameter field carries
+// `deprecated:"true"` (or "1"). The flag becomes Parameter.Deprecated in
+// the emitted spec.
+func fieldDeprecated(f reflect.StructField) bool {
+	v, ok := f.Tag.Lookup("deprecated")
+	if !ok {
+		return false
+	}
+	return v == "true" || v == "1"
 }

@@ -33,9 +33,16 @@ type CreatePetCommand struct {
 }
 
 type ListPetsParams struct {
-	Tag     string `query:"tag"`
-	Limit   int    `query:"limit"`
-	TraceID string `              header:"X-Trace-Id"`
+	// Tag is optional (pointer) — Scalar marks it as not required.
+	Tag *string `query:"tag"`
+	// Limit is required (non-pointer scalar).
+	Limit int `query:"limit"`
+	// Cursor is deprecated; renderers strike it through. Pointer
+	// makes it optional, which is the usual shape for a legacy param
+	// kept around for back-compat.
+	Cursor *string `query:"cursor" deprecated:"true"`
+	// TraceID is a required header (non-pointer string).
+	TraceID string `                                 header:"X-Trace-Id"`
 }
 
 type GetPetParams struct {
@@ -357,6 +364,16 @@ func main() {
 			"Invalid body",
 		),
 		openapi.Security("petstoreOAuth", "write:pets"),
+	)
+
+	pets.Get("/legacy", listPets,
+		openapi.Summary("List pets (legacy)"),
+		openapi.Description(
+			"Old listing endpoint kept for back-compat. Use GET /pets instead.",
+		),
+		openapi.Deprecated(),
+		openapi.ReturnsBody[[]Pet](http.StatusOK, "Pets"),
+		openapi.OptionalSecurity(),
 	)
 
 	pets.Delete(

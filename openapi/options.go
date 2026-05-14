@@ -16,6 +16,7 @@ import (
 type endpointMeta struct {
 	Summary          string
 	Description      string
+	Deprecated       bool
 	Tags             []string
 	Responses        []ResponseDecl
 	Security         []SecurityRequirement
@@ -86,6 +87,14 @@ func Summary(s string) router.Option {
 // Description sets the operation's long-form description.
 func Description(s string) router.Option {
 	return func(ep *router.Endpoint) { writeMeta(ep).Description = s }
+}
+
+// Deprecated marks the operation as deprecated. Renderers (Scalar, Swagger
+// UI) typically style deprecated endpoints with a strikethrough and a
+// banner; code generators may emit annotations on the corresponding
+// client method.
+func Deprecated() router.Option {
+	return func(ep *router.Endpoint) { writeMeta(ep).Deprecated = true }
 }
 
 // Tags appends tags used to group operations in the rendered docs.

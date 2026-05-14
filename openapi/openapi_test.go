@@ -391,8 +391,12 @@ func TestSpec_QueryParams(t *testing.T) {
 	if byName["limit"].In != "query" {
 		t.Errorf("limit in: %q", byName["limit"].In)
 	}
-	if byName["limit"].Required {
-		t.Errorf("query params should not be required by default")
+	// Non-pointer scalars are required; pointers are optional.
+	if !byName["limit"].Required {
+		t.Errorf("limit (int) should be required")
+	}
+	if byName["done"].Required {
+		t.Errorf("done (*bool) should be optional")
 	}
 	if byName["done"].Schema.Type != "boolean" {
 		t.Errorf("done schema: %+v", byName["done"].Schema)
@@ -406,6 +410,69 @@ func TestSpec_HeaderParam(t *testing.T) {
 	if len(op.Parameters) != 1 || op.Parameters[0].Name != "X-Trace-Id" ||
 		op.Parameters[0].In != "header" {
 		t.Errorf("header param: %+v", op.Parameters)
+	}
+	// string is non-pointer / non-slice -> required.
+	if !op.Parameters[0].Required {
+		t.Errorf("X-Trace-Id (string) should be required")
+	}
+}
+
+type optionalHeaderParams struct {
+	IfMatch *string `header:"If-Match"`
+}
+
+func TestSpec_HeaderParamOptionalWhenPointer(t *testing.T) {
+	r := router.New()
+	r.Get("/items", noopP[optionalHeaderParams])
+	op := operation(t, r, "/items", "GET")
+	if op.Parameters[0].Required {
+		t.Errorf("*string header should be optional, got Required=true")
+	}
+}
+
+type deprecatedParams struct {
+	Old    string `query:"old"    deprecated:"true"`
+	Cursor string `query:"cursor"`
+}
+
+func TestSpec_ParamDeprecated(t *testing.T) {
+	r := router.New()
+	r.Get("/items", noopP[deprecatedParams])
+	op := operation(t, r, "/items", "GET")
+	byName := map[string]*Parameter{}
+	for _, p := range op.Parameters {
+		byName[p.Name] = p
+	}
+	if !byName["old"].Deprecated {
+		t.Errorf("old should be deprecated")
+	}
+	if byName["cursor"].Deprecated {
+		t.Errorf("cursor should not be deprecated")
+	}
+
+	raw, _ := json.Marshal(op)
+	if !strings.Contains(string(raw), `"deprecated":true`) {
+		t.Errorf("emitted JSON missing deprecated=true on param:\n%s", raw)
+	}
+}
+
+func TestSpec_OperationDeprecated(t *testing.T) {
+	r := router.New()
+	r.Get("/old", noop, Deprecated(), Summary("legacy"))
+	op := operation(t, r, "/old", "GET")
+	if !op.Deprecated {
+		t.Errorf("operation should be deprecated")
+	}
+
+	r2 := router.New()
+	r2.Get("/new", noop, Summary("current"))
+	op2 := operation(t, r2, "/new", "GET")
+	if op2.Deprecated {
+		t.Errorf("operation without Deprecated() should not be marked")
+	}
+	raw, _ := json.Marshal(op2)
+	if strings.Contains(string(raw), `"deprecated"`) {
+		t.Errorf("non-deprecated op should omit field; got:\n%s", raw)
 	}
 }
 

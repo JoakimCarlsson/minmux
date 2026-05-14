@@ -76,6 +76,36 @@ Pointer types make optional query parameters explicit: `*bool` is `nil`
 when the query string omits the key, set when present. Plain types
 default to their zero value.
 
+The same pointer-vs-value distinction drives the generated OpenAPI:
+a non-pointer scalar field emits `required: true`, while pointer (and
+slice) fields are optional. This matches form fields and lets the spec
+faithfully describe what the handler actually expects. Header
+parameters (`header:"X-Trace-Id"`) follow the same rule.
+
+To mark a parameter deprecated — useful for legacy query keys you're
+keeping around for back-compat — add `deprecated:"true"` to the tag:
+
+```go
+type ListParams struct {
+    Cursor *string `query:"cursor" deprecated:"true"` // optional + deprecated
+    Limit  int    `query:"limit"`
+}
+```
+
+Operations themselves can be deprecated via the `openapi.Deprecated()`
+option:
+
+```go
+r.Get("/users/old", listLegacy,
+    openapi.Summary("List users (legacy)"),
+    openapi.Deprecated(),
+)
+```
+
+Renderers like Scalar and Swagger UI style deprecated parameters and
+operations distinctly (strikethrough, banner) so consumers see them at a
+glance.
+
 ## Request body
 
 `body:""` on a struct field decodes the entire JSON body into it:

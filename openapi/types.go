@@ -53,6 +53,7 @@ type Operation struct {
 	Tags        []string               `json:"tags,omitempty"`
 	Summary     string                 `json:"summary,omitempty"`
 	Description string                 `json:"description,omitempty"`
+	Deprecated  bool                   `json:"deprecated,omitempty"`
 	Parameters  []*Parameter           `json:"parameters,omitempty"`
 	RequestBody *RequestBody           `json:"requestBody,omitempty"`
 	Responses   map[string]*Response   `json:"responses"`
@@ -61,10 +62,11 @@ type Operation struct {
 
 // Parameter is a path, query, or header parameter.
 type Parameter struct {
-	Name     string  `json:"name"`
-	In       string  `json:"in"`
-	Required bool    `json:"required,omitempty"`
-	Schema   *Schema `json:"schema"`
+	Name       string  `json:"name"`
+	In         string  `json:"in"`
+	Required   bool    `json:"required,omitempty"`
+	Deprecated bool    `json:"deprecated,omitempty"`
+	Schema     *Schema `json:"schema"`
 }
 
 // RequestBody is the typed body of an operation.
