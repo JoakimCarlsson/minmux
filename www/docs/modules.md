@@ -10,13 +10,13 @@ You install only the modules you use.
 
 | Module | Purpose |
 |---|---|
-| `router` | Routing, parameter binding, filters, typed Results, ProblemDetails. Built on `net/http`. |
+| `router` | Routing, parameter binding, response context helpers, ProblemDetails. Built on `net/http`. Zero external dependencies. |
 
 ## Documentation
 
 | Module | Purpose |
 |---|---|
-| `openapi` | OpenAPI 3.x spec generation from handler signatures. Depends on `router`. |
+| `openapi` | OpenAPI 3.1 spec generation from explicit endpoint annotations. Depends on `router`. |
 
 ## Planned
 
