@@ -456,6 +456,102 @@ func TestSpec_ParamDeprecated(t *testing.T) {
 	}
 }
 
+func TestSpec_ResponseHeader_DefaultString(t *testing.T) {
+	r := router.New()
+	r.Post("/pets", noop,
+		ReturnsBody[User](http.StatusCreated, "Pet created",
+			WithHeader("Location", "URL of the new pet"),
+			WithHeader("X-Request-Id", "Correlation id"),
+		),
+	)
+	op := operation(t, r, "/pets", "POST")
+	resp := op.Responses["201"]
+	if resp == nil {
+		t.Fatal("201 missing")
+	}
+	if len(resp.Headers) != 2 {
+		t.Fatalf(
+			"headers: want 2, got %d (%+v)",
+			len(resp.Headers),
+			resp.Headers,
+		)
+	}
+	loc := resp.Headers["Location"]
+	if loc == nil || loc.Description != "URL of the new pet" {
+		t.Errorf("Location: %+v", loc)
+	}
+	if loc.Schema == nil || loc.Schema.Type != "string" {
+		t.Errorf("Location schema: %+v", loc.Schema)
+	}
+}
+
+func TestSpec_ResponseHeader_CustomSchema(t *testing.T) {
+	r := router.New()
+	r.Get("/items", noop,
+		ReturnsBody[User](http.StatusOK, "Items",
+			WithHeader("Retry-After", "Seconds before retrying",
+				WithHeaderSchema(&Schema{Type: "integer", Format: "int32"}),
+			),
+		),
+	)
+	op := operation(t, r, "/items", "GET")
+	h := op.Responses["200"].Headers["Retry-After"]
+	if h.Schema.Type != "integer" || h.Schema.Format != "int32" {
+		t.Errorf("Retry-After schema: %+v", h.Schema)
+	}
+}
+
+func TestSpec_ResponseHeader_OnReturnsNoBody(t *testing.T) {
+	r := router.New()
+	r.Delete("/items/{id}", noop,
+		Returns(http.StatusNoContent, "Deleted",
+			WithHeader("X-Trace-Id", "Trace id of the delete operation"),
+		),
+	)
+	op := operation(t, r, "/items/{id}", "DELETE")
+	resp := op.Responses["204"]
+	if resp.Headers["X-Trace-Id"] == nil {
+		t.Errorf("X-Trace-Id header missing on 204")
+	}
+	if resp.Content != nil {
+		t.Errorf("204 should have no content, got %+v", resp.Content)
+	}
+}
+
+func TestSpec_ResponseHeader_JSONShape(t *testing.T) {
+	r := router.New()
+	r.Post("/pets", noop,
+		ReturnsBody[User](http.StatusCreated, "Created",
+			WithHeader("Location", "URL of the new pet"),
+		),
+	)
+	doc := NewGenerator(Info{Title: "T", Version: "1"}).Spec(r)
+	raw, _ := json.Marshal(doc)
+	s := string(raw)
+	for _, want := range []string{
+		`"headers":{`,
+		`"Location":{`,
+		`"description":"URL of the new pet"`,
+		`"schema":{"type":"string"}`,
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("spec missing %q in:\n%s", want, s)
+		}
+	}
+}
+
+func TestSpec_ResponseHeader_OmittedWhenNone(t *testing.T) {
+	r := router.New()
+	r.Get("/pets", noop,
+		ReturnsBody[User](http.StatusOK, "OK"),
+	)
+	doc := NewGenerator(Info{Title: "T", Version: "1"}).Spec(r)
+	raw, _ := json.Marshal(doc)
+	if strings.Contains(string(raw), `"headers"`) {
+		t.Errorf("spec should omit empty headers; got:\n%s", raw)
+	}
+}
+
 func TestDeriveOperationID(t *testing.T) {
 	cases := []struct {
 		method, path, want string

@@ -79,6 +79,7 @@ type RequestBody struct {
 // Response is a single status-code response variant.
 type Response struct {
 	Description string                `json:"description"`
+	Headers     map[string]*Header    `json:"headers,omitempty"`
 	Content     map[string]*MediaType `json:"content,omitempty"`
 }
 
@@ -106,10 +107,16 @@ type Encoding struct {
 	ItemEncoding   *Encoding          `json:"itemEncoding,omitempty"`
 }
 
-// Header describes a fixed header on a multipart part. Only Schema is emitted
-// today; extend as more fields are needed.
+// Header describes a single header — either a fixed header on a multipart
+// part (used inside Encoding.Headers) or a response header advertised on
+// a Response Object (used inside Response.Headers).
+//
+// Description is human-readable text rendered by tools like Scalar above
+// the header name. Schema describes the value; when nil the renderer
+// assumes a plain string.
 type Header struct {
-	Schema *Schema `json:"schema,omitempty"`
+	Description string  `json:"description,omitempty"`
+	Schema      *Schema `json:"schema,omitempty"`
 }
 
 // Components is the document's reusable-definitions block.

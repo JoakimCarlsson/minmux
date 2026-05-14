@@ -604,7 +604,7 @@ func (b *schemaBuilder) responseFromDecl(
 	decl ResponseDecl,
 	desc string,
 ) *Response {
-	r := &Response{Description: desc}
+	r := &Response{Description: desc, Headers: decl.Headers}
 	switch decl.StreamKind {
 	case streamSequential:
 		r.Content = map[string]*MediaType{}

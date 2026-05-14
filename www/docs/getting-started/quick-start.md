@@ -106,6 +106,42 @@ Renderers like Scalar and Swagger UI style deprecated parameters and
 operations distinctly (strikethrough, banner) so consumers see them at a
 glance.
 
+## Response headers
+
+CRUD APIs typically return useful headers — `Location` on `201 Created`,
+`ETag` and `Cache-Control` on cacheable reads, `Retry-After` when
+rate-limited. Declare them on a response via `openapi.WithHeader`:
+
+```go
+r.Post("/pets", createPet,
+    openapi.ReturnsBody[Pet](http.StatusCreated, "Pet created",
+        openapi.WithHeader("Location", "URL of the new pet"),
+    ),
+)
+
+r.Get("/pets/{id}", getPet,
+    openapi.ReturnsBody[Pet](http.StatusOK, "Pet",
+        openapi.WithHeader("ETag", "Opaque revision marker"),
+        openapi.WithHeader("Cache-Control", "Cache hints (e.g. max-age=60)"),
+    ),
+)
+```
+
+The default schema is a plain string. Override for typed headers like
+`Retry-After` (integer seconds) using `openapi.WithHeaderSchema`:
+
+```go
+openapi.WithHeader("Retry-After", "Seconds before retrying",
+    openapi.WithHeaderSchema(&openapi.Schema{Type: "integer", Format: "int32"}),
+)
+```
+
+`WithHeader` is a `ResponseOption` — it attaches to the surrounding
+`Returns` / `ReturnsBody` declaration, not the operation as a whole, so
+each status code gets its own headers map. `Returns` accepts headers too,
+which matters for bodyless responses like `204 No Content` carrying an
+`X-Trace-Id`.
+
 ## operationId
 
 Every operation in the generated spec carries an `operationId` — the

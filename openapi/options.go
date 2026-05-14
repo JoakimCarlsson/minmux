@@ -58,6 +58,46 @@ type ResponseDecl struct {
 	ItemType     reflect.Type
 	ItemEncoding *Encoding
 	PrefixParts  []*Encoding
+	Headers      map[string]*Header
+}
+
+// ResponseOption customizes a single response declaration in-place. Used
+// as the variadic tail of Returns / ReturnsBody to attach response
+// metadata that isn't part of the core (status, description, body type).
+type ResponseOption func(*ResponseDecl)
+
+// WithHeader declares a response header (e.g. Location, ETag, Retry-After)
+// on the response being declared. The default schema is a plain string,
+// which is what most response headers carry; pass WithHeaderSchema to
+// override.
+//
+//	openapi.ReturnsBody[Pet](http.StatusCreated, "Pet created",
+//	    openapi.WithHeader("Location", "URL of the new pet"),
+//	)
+func WithHeader(name, description string, opts ...HeaderOption) ResponseOption {
+	return func(d *ResponseDecl) {
+		if d.Headers == nil {
+			d.Headers = map[string]*Header{}
+		}
+		h := &Header{
+			Description: description,
+			Schema:      &Schema{Type: "string"},
+		}
+		for _, o := range opts {
+			o(h)
+		}
+		d.Headers[name] = h
+	}
+}
+
+// HeaderOption customizes a response Header beyond the WithHeader defaults.
+type HeaderOption func(*Header)
+
+// WithHeaderSchema overrides the default `string` schema for a response
+// header. Useful for typed headers like Retry-After (integer seconds) or
+// X-Rate-Limit-Remaining (integer).
+func WithHeaderSchema(s *Schema) HeaderOption {
+	return func(h *Header) { h.Schema = s }
 }
 
 // metaKey is the private key used to store endpointMeta in
@@ -121,28 +161,43 @@ func Tags(t ...string) router.Option {
 // Returns declares a response with a status code and no body. Use this for
 // 204 No Content, 304 Not Modified, redirects, and any other status that
 // has no payload. Pass an empty description to use the standard HTTP
-// status text.
-func Returns(status int, description string) router.Option {
+// status text. Variadic opts attach response metadata such as headers
+// (see WithHeader).
+func Returns(
+	status int,
+	description string,
+	opts ...ResponseOption,
+) router.Option {
 	return func(ep *router.Endpoint) {
 		m := writeMeta(ep)
-		m.Responses = append(m.Responses, ResponseDecl{
-			Status:      status,
-			Description: description,
-		})
+		decl := ResponseDecl{Status: status, Description: description}
+		for _, o := range opts {
+			o(&decl)
+		}
+		m.Responses = append(m.Responses, decl)
 	}
 }
 
 // ReturnsBody declares a response with a status code and a typed JSON body.
-// Pass an empty description to use the standard HTTP status text.
-func ReturnsBody[T any](status int, description string) router.Option {
+// Pass an empty description to use the standard HTTP status text. Variadic
+// opts attach response metadata such as headers (see WithHeader).
+func ReturnsBody[T any](
+	status int,
+	description string,
+	opts ...ResponseOption,
+) router.Option {
 	bodyType := reflect.TypeFor[T]()
 	return func(ep *router.Endpoint) {
 		m := writeMeta(ep)
-		m.Responses = append(m.Responses, ResponseDecl{
+		decl := ResponseDecl{
 			Status:      status,
 			Description: description,
 			BodyType:    bodyType,
-		})
+		}
+		for _, o := range opts {
+			o(&decl)
+		}
+		m.Responses = append(m.Responses, decl)
 	}
 }
 

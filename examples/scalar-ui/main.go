@@ -352,7 +352,18 @@ func main() {
 
 	pets.Get("/{id}", getPet,
 		openapi.Summary("Get a pet by id"),
-		openapi.ReturnsBody[Pet](http.StatusOK, "Pet"),
+		openapi.ReturnsBody[Pet](
+			http.StatusOK,
+			"Pet",
+			openapi.WithHeader(
+				"ETag",
+				"Opaque revision marker for conditional GETs",
+			),
+			openapi.WithHeader(
+				"Cache-Control",
+				"Cache hints (e.g. max-age=60)",
+			),
+		),
 		openapi.ReturnsBody[router.ProblemDetails](
 			http.StatusNotFound,
 			"Pet not found",
@@ -361,7 +372,9 @@ func main() {
 
 	pets.Post("", createPet,
 		openapi.Summary("Create a pet"),
-		openapi.ReturnsBody[Pet](http.StatusCreated, "Pet created"),
+		openapi.ReturnsBody[Pet](http.StatusCreated, "Pet created",
+			openapi.WithHeader("Location", "URL of the newly created pet"),
+		),
 		openapi.ReturnsBody[router.ProblemDetails](
 			http.StatusBadRequest,
 			"Invalid body",
@@ -375,7 +388,14 @@ func main() {
 			"Old listing endpoint kept for back-compat. Use GET /pets instead.",
 		),
 		openapi.Deprecated(),
-		openapi.ReturnsBody[[]Pet](http.StatusOK, "Pets"),
+		openapi.ReturnsBody[[]Pet](http.StatusOK, "Pets",
+			openapi.WithHeader("Retry-After",
+				"Seconds before retrying when rate-limited",
+				openapi.WithHeaderSchema(&openapi.Schema{
+					Type: "integer", Format: "int32",
+				}),
+			),
+		),
 		openapi.OptionalSecurity(),
 	)
 
