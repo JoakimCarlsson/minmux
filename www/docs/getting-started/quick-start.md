@@ -106,6 +106,43 @@ Renderers like Scalar and Swagger UI style deprecated parameters and
 operations distinctly (strikethrough, banner) so consumers see them at a
 glance.
 
+## Schema constraints
+
+Struct-field tags map 1:1 to the OAS schema keywords most clients care
+about. They apply to path, query, header, and body fields alike:
+
+| Tag | Maps to | Applies to |
+|---|---|---|
+| `minimum:"N"` | `minimum` | numeric fields |
+| `maximum:"N"` | `maximum` | numeric fields |
+| `minLength:"N"` | `minLength` | string fields |
+| `maxLength:"N"` | `maxLength` | string fields |
+| `pattern:"<regex>"` | `pattern` | string fields |
+| `enum:"a,b,c"` | `enum` | scalar fields (type-aware) |
+| `default:"x"` | `default` | scalar fields (type-aware) |
+
+```go
+type ListPetsParams struct {
+    Tag    *string `query:"tag"    enum:"dog,cat,bird,fish"`
+    Limit  int     `query:"limit"  minimum:"1" maximum:"100" default:"20"`
+}
+
+type CreatePetCommand struct {
+    Name string `json:"name" minLength:"1" maxLength:"100" pattern:"^[A-Za-z ]+$"`
+    Tag  string `json:"tag"  enum:"dog,cat,bird,fish"`
+}
+```
+
+`enum` and `default` are coerced to the field's Go type, so an integer
+field with `enum:"1,2,3"` marshals as JSON numbers (`"enum":[1,2,3]`)
+rather than strings. Unparseable values are silently dropped — the spec
+stays valid; the constraint just doesn't take effect.
+
+These tags are documentation-only today: minmux generates the schema
+but does not validate incoming requests against it. Renderers like
+Scalar surface the constraints in "Try it" forms and code samples; the
+handler is still responsible for runtime validation.
+
 ## Response headers
 
 CRUD APIs typically return useful headers — `Location` on `201 Created`,

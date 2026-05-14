@@ -552,6 +552,134 @@ func TestSpec_ResponseHeader_OmittedWhenNone(t *testing.T) {
 	}
 }
 
+type constraintParams struct {
+	Limit  int    `query:"limit"  minimum:"1" maximum:"100" default:"20"`
+	Name   string `query:"name"                                              minLength:"1" maxLength:"50" pattern:"^[a-zA-Z]+$"`
+	Status string `query:"status"                           default:"active"                                                    enum:"active,archived,pending"`
+	Score  int    `query:"score"                                                                                                enum:"1,2,3,4,5"`
+}
+
+func TestSpec_FieldConstraints_NumericMinMax(t *testing.T) {
+	r := router.New()
+	r.Get("/items", noopP[constraintParams])
+	op := operation(t, r, "/items", "GET")
+	byName := map[string]*Parameter{}
+	for _, p := range op.Parameters {
+		byName[p.Name] = p
+	}
+	lim := byName["limit"].Schema
+	if lim.Minimum == nil || *lim.Minimum != 1 {
+		t.Errorf("limit minimum: %+v", lim.Minimum)
+	}
+	if lim.Maximum == nil || *lim.Maximum != 100 {
+		t.Errorf("limit maximum: %+v", lim.Maximum)
+	}
+	if lim.Default != int64(20) {
+		t.Errorf(
+			"limit default: got %v (%T), want int64(20)",
+			lim.Default,
+			lim.Default,
+		)
+	}
+}
+
+func TestSpec_FieldConstraints_StringLengthAndPattern(t *testing.T) {
+	r := router.New()
+	r.Get("/items", noopP[constraintParams])
+	op := operation(t, r, "/items", "GET")
+	byName := map[string]*Parameter{}
+	for _, p := range op.Parameters {
+		byName[p.Name] = p
+	}
+	name := byName["name"].Schema
+	if name.MinLength == nil || *name.MinLength != 1 {
+		t.Errorf("name minLength: %+v", name.MinLength)
+	}
+	if name.MaxLength == nil || *name.MaxLength != 50 {
+		t.Errorf("name maxLength: %+v", name.MaxLength)
+	}
+	if name.Pattern != "^[a-zA-Z]+$" {
+		t.Errorf("name pattern: %q", name.Pattern)
+	}
+}
+
+func TestSpec_FieldConstraints_EnumStrings(t *testing.T) {
+	r := router.New()
+	r.Get("/items", noopP[constraintParams])
+	op := operation(t, r, "/items", "GET")
+	byName := map[string]*Parameter{}
+	for _, p := range op.Parameters {
+		byName[p.Name] = p
+	}
+	status := byName["status"].Schema
+	want := []any{"active", "archived", "pending"}
+	if !reflect.DeepEqual(status.Enum, want) {
+		t.Errorf("status enum: got %v want %v", status.Enum, want)
+	}
+	if status.Default != "active" {
+		t.Errorf("status default: %v", status.Default)
+	}
+}
+
+func TestSpec_FieldConstraints_EnumIntsTyped(t *testing.T) {
+	r := router.New()
+	r.Get("/items", noopP[constraintParams])
+	op := operation(t, r, "/items", "GET")
+	byName := map[string]*Parameter{}
+	for _, p := range op.Parameters {
+		byName[p.Name] = p
+	}
+	score := byName["score"].Schema
+	want := []any{int64(1), int64(2), int64(3), int64(4), int64(5)}
+	if !reflect.DeepEqual(score.Enum, want) {
+		t.Errorf("score enum: got %v want %v", score.Enum, want)
+	}
+
+	// Verify JSON shape — ints must marshal as numbers, not strings.
+	doc := NewGenerator(Info{Title: "T", Version: "1"}).Spec(r)
+	raw, _ := json.Marshal(doc)
+	if !strings.Contains(string(raw), `"enum":[1,2,3,4,5]`) {
+		t.Errorf("score enum must marshal as numbers; got:\n%s", raw)
+	}
+}
+
+type constrainedBody struct {
+	Email string `json:"email" minLength:"3" maxLength:"254" pattern:"^.+@.+$"`
+	Age   int    `json:"age"                                                   minimum:"0" maximum:"150"`
+}
+
+func TestSpec_FieldConstraints_OnBodyStructFields(t *testing.T) {
+	b := newSchemaBuilder()
+	s := b.structSchema(reflect.TypeFor[constrainedBody]())
+	email := s.Properties["email"]
+	if email.MinLength == nil || *email.MinLength != 3 {
+		t.Errorf("email minLength: %+v", email.MinLength)
+	}
+	if email.Pattern != "^.+@.+$" {
+		t.Errorf("email pattern: %q", email.Pattern)
+	}
+	age := s.Properties["age"]
+	if age.Maximum == nil || *age.Maximum != 150 {
+		t.Errorf("age maximum: %+v", age.Maximum)
+	}
+}
+
+func TestSpec_FieldConstraints_InvalidValuesIgnored(t *testing.T) {
+	type junkParams struct {
+		Limit int `query:"limit" minimum:"abc" maximum:""`
+	}
+	r := router.New()
+	r.Get("/items", noopP[junkParams])
+	op := operation(t, r, "/items", "GET")
+	s := op.Parameters[0].Schema
+	if s.Minimum != nil {
+		t.Errorf("unparseable minimum should be ignored, got %+v", s.Minimum)
+	}
+	if s.Maximum != nil {
+		t.Errorf("empty maximum should be ignored, got %+v", s.Maximum)
+	}
+}
+
 func TestDeriveOperationID(t *testing.T) {
 	cases := []struct {
 		method, path, want string

@@ -750,15 +750,115 @@ func (b *schemaBuilder) structSchema(t reflect.Type) *Schema {
 	return &Schema{Type: "object", Properties: props}
 }
 
-// applyFieldFormat applies a struct field's `format:"..."` tag to its
-// schema, overriding any auto-inferred format. The tag is a passthrough
-// for OAS-registered formats (email, password, uuid, uri, ...) that
-// cannot be inferred from the Go type alone.
+// applyFieldFormat applies a struct field's `format:"..."` tag and any
+// schema-constraint tags (minimum, maximum, minLength, maxLength,
+// pattern, enum, default) to its schema, overriding auto-inferred
+// values. The format tag is a passthrough for OAS-registered formats
+// (email, password, uuid, uri, ...). Constraint values are parsed in
+// terms of the field's Go type — `minimum:"0"` on an int field becomes
+// a numeric minimum, `enum:"a,b,c"` on a string field becomes a string
+// enum, and so on.
 func applyFieldFormat(s *Schema, f reflect.StructField) *Schema {
 	if v, ok := f.Tag.Lookup("format"); ok && v != "" {
 		s.Format = v
 	}
+	applyFieldConstraints(s, f)
 	return s
+}
+
+// applyFieldConstraints reads the schema-constraint tags off f and
+// writes them onto s. Values are parsed in terms of the scalar element
+// type underlying f (slice elements, pointer elements). Unparseable
+// values silently fall through — the spec stays valid, the constraint
+// just doesn't apply.
+func applyFieldConstraints(s *Schema, f reflect.StructField) {
+	t := scalarKind(f.Type)
+
+	if v, ok := f.Tag.Lookup("minimum"); ok && v != "" {
+		if n, err := strconv.ParseFloat(v, 64); err == nil {
+			s.Minimum = &n
+		}
+	}
+	if v, ok := f.Tag.Lookup("maximum"); ok && v != "" {
+		if n, err := strconv.ParseFloat(v, 64); err == nil {
+			s.Maximum = &n
+		}
+	}
+	if v, ok := f.Tag.Lookup("minLength"); ok && v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			s.MinLength = &n
+		}
+	}
+	if v, ok := f.Tag.Lookup("maxLength"); ok && v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			s.MaxLength = &n
+		}
+	}
+	if v, ok := f.Tag.Lookup("pattern"); ok && v != "" {
+		s.Pattern = v
+	}
+	if v, ok := f.Tag.Lookup("enum"); ok && v != "" {
+		parts := strings.Split(v, ",")
+		out := make([]any, 0, len(parts))
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			out = append(out, coerceScalar(p, t))
+		}
+		if len(out) > 0 {
+			s.Enum = out
+		}
+	}
+	if v, ok := f.Tag.Lookup("default"); ok {
+		s.Default = coerceScalar(v, t)
+	}
+}
+
+// scalarKind returns the underlying scalar Kind of t — peeling off
+// pointers and slice/array element types so that `*int` and `[]int` both
+// report Int. Used by tag parsers to decide how to coerce string tag
+// values to typed enum/default entries.
+func scalarKind(t reflect.Type) reflect.Kind {
+	for {
+		switch t.Kind() {
+		case reflect.Ptr, reflect.Slice, reflect.Array:
+			t = t.Elem()
+			continue
+		}
+		return t.Kind()
+	}
+}
+
+// coerceScalar turns a struct-tag string into the typed Go value matching
+// kind, so JSON marshaling emits e.g. `"enum":[1,2,3]` for an int field
+// rather than `"enum":["1","2","3"]`. Unparseable input falls back to the
+// raw string — the spec stays valid even if the value type drifts.
+func coerceScalar(v string, kind reflect.Kind) any {
+	switch kind {
+	case reflect.Bool:
+		if b, err := strconv.ParseBool(v); err == nil {
+			return b
+		}
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			return n
+		}
+	case reflect.Uint,
+		reflect.Uint8,
+		reflect.Uint16,
+		reflect.Uint32,
+		reflect.Uint64:
+		if n, err := strconv.ParseUint(v, 10, 64); err == nil {
+			return n
+		}
+	case reflect.Float32, reflect.Float64:
+		if n, err := strconv.ParseFloat(v, 64); err == nil {
+			return n
+		}
+	}
+	return v
 }
 
 // fieldDeprecated reports whether a parameter field carries

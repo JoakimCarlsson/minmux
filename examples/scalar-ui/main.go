@@ -22,27 +22,25 @@ import (
 
 type Pet struct {
 	ID        string    `json:"id"            format:"uuid"`
-	Name      string    `json:"name"`
-	Tag       string    `json:"tag,omitempty"`
+	Name      string    `json:"name"                        minLength:"1" maxLength:"100"`
+	Tag       string    `json:"tag,omitempty"                                             enum:"dog,cat,bird,fish"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 type CreatePetCommand struct {
-	Name string `json:"name"`
-	Tag  string `json:"tag,omitempty"`
+	Name string `json:"name"          minLength:"1" maxLength:"100" pattern:"^[A-Za-z ]+$"`
+	Tag  string `json:"tag,omitempty"                                                      enum:"dog,cat,bird,fish"`
 }
 
 type ListPetsParams struct {
-	// Tag is optional (pointer) — Scalar marks it as not required.
-	Tag *string `query:"tag"`
-	// Limit is required (non-pointer scalar).
-	Limit int `query:"limit"`
-	// Cursor is deprecated; renderers strike it through. Pointer
-	// makes it optional, which is the usual shape for a legacy param
-	// kept around for back-compat.
-	Cursor *string `query:"cursor" deprecated:"true"`
-	// TraceID is a required header (non-pointer string).
-	TraceID string `                                 header:"X-Trace-Id"`
+	// Tag is optional (pointer) and constrained to a known set of values.
+	Tag *string `query:"tag"    enum:"dog,cat,bird,fish"`
+	// Limit is required, bounded, with a default.
+	Limit int `query:"limit"                           minimum:"1" maximum:"100" default:"20"`
+	// Cursor is deprecated; renderers strike it through.
+	Cursor *string `query:"cursor"                                                                 deprecated:"true"`
+	// TraceID is a required header with a UUID format constraint.
+	TraceID string `                                                                                                 header:"X-Trace-Id" format:"uuid"`
 }
 
 type GetPetParams struct {
