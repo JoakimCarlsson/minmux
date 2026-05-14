@@ -34,8 +34,15 @@ type Info struct {
 // options attached to each endpoint. Responses are taken purely from
 // explicit Returns[T] declarations; the handler signature provides no
 // implicit success response.
+//
+// SecuritySchemes registers reusable auth definitions under
+// components.securitySchemes. Security sets the document-level default
+// Security Requirement list; individual operations may override it via
+// the Security / NoSecurity / OptionalSecurity options.
 type Generator struct {
-	Info Info
+	Info            Info
+	SecuritySchemes map[string]*SecurityScheme
+	Security        []SecurityRequirement
 }
 
 // NewGenerator constructs a Generator.
@@ -61,9 +68,16 @@ func (g *Generator) Spec(r *router.Router) *Document {
 		Info:              g.Info,
 		JSONSchemaDialect: "https://spec.openapis.org/oas/3.1/dialect/base",
 		Paths:             paths,
+		Security:          g.Security,
 	}
-	if len(b.components) > 0 {
-		doc.Components = &Components{Schemas: b.components}
+	if len(b.components) > 0 || len(g.SecuritySchemes) > 0 {
+		doc.Components = &Components{}
+		if len(b.components) > 0 {
+			doc.Components.Schemas = b.components
+		}
+		if len(g.SecuritySchemes) > 0 {
+			doc.Components.SecuritySchemes = g.SecuritySchemes
+		}
 	}
 	return doc
 }
@@ -115,11 +129,85 @@ func (b *schemaBuilder) buildOperation(ep *router.Endpoint) *Operation {
 		Summary:     m.Summary,
 		Description: m.Description,
 		Responses:   b.buildResponses(m),
+		Security:    operationSecurity(m),
 	}
 	if ep.ParamType != nil {
 		op.Parameters, op.RequestBody = b.buildParams(ep.ParamType)
 	}
+	op.Parameters = fillMissingPathParams(ep.Path, op.Parameters)
 	return op
+}
+
+// fillMissingPathParams ensures every "{name}" segment in the route path
+// has a corresponding Parameter Object, as required by OAS 3.2 §4.4.1.1.
+// Names already declared via the handler's Params struct are left alone;
+// the rest get a generic required string parameter so the generated spec
+// is always conformant, even when a handler ignores a path variable.
+// Go 1.22 ServeMux wildcard segments ({name...}) are emitted under their
+// base name; the "{$}" end-of-path anchor is skipped (not a parameter).
+func fillMissingPathParams(path string, params []*Parameter) []*Parameter {
+	declared := map[string]bool{}
+	for _, p := range params {
+		if p.In == "path" {
+			declared[p.Name] = true
+		}
+	}
+	for _, name := range pathTemplateNames(path) {
+		if declared[name] {
+			continue
+		}
+		params = append(params, &Parameter{
+			Name:     name,
+			In:       "path",
+			Required: true,
+			Schema:   &Schema{Type: "string"},
+		})
+		declared[name] = true
+	}
+	return params
+}
+
+// pathTemplateNames returns the ordered list of variable names extracted
+// from a Go 1.22 ServeMux pattern path. The "{name...}" wildcard form is
+// reduced to "name"; the "{$}" anchor is skipped.
+func pathTemplateNames(path string) []string {
+	var out []string
+	for i := 0; i < len(path); i++ {
+		if path[i] != '{' {
+			continue
+		}
+		end := strings.IndexByte(path[i+1:], '}')
+		if end < 0 {
+			return out
+		}
+		name := path[i+1 : i+1+end]
+		i += end + 1
+		if name == "$" {
+			continue
+		}
+		name = strings.TrimSuffix(name, "...")
+		if name == "" {
+			continue
+		}
+		out = append(out, name)
+	}
+	return out
+}
+
+// operationSecurity translates the accumulated endpoint security meta into
+// the Operation.Security pointer. nil means "inherit document default",
+// a non-nil empty slice emits "security": [] and clears the inherited
+// default, and a non-empty slice lists the alternative requirements.
+func operationSecurity(m *endpointMeta) *[]SecurityRequirement {
+	if len(m.Security) > 0 {
+		s := m.Security
+		return &s
+	}
+	if m.SecurityOverride {
+		s := []SecurityRequirement{}
+		return &s
+	}
+	return nil
 }
 
 // formProperty captures a single form: / file: field for assembling a

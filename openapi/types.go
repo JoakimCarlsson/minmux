@@ -1,13 +1,15 @@
 package openapi
 
 // Document is the root OpenAPI document. Field order in JSON output follows
-// the conventional OpenAPI 3.2 layout: openapi, info, dialect, paths, components.
+// the conventional OpenAPI 3.2 layout: openapi, info, dialect, paths,
+// components, security.
 type Document struct {
-	OpenAPI           string               `json:"openapi"`
-	Info              Info                 `json:"info"`
-	JSONSchemaDialect string               `json:"jsonSchemaDialect,omitempty"`
-	Paths             map[string]*PathItem `json:"paths"`
-	Components        *Components          `json:"components,omitempty"`
+	OpenAPI           string                `json:"openapi"`
+	Info              Info                  `json:"info"`
+	JSONSchemaDialect string                `json:"jsonSchemaDialect,omitempty"`
+	Paths             map[string]*PathItem  `json:"paths"`
+	Components        *Components           `json:"components,omitempty"`
+	Security          []SecurityRequirement `json:"security,omitempty"`
 }
 
 // PathItem is a single path entry, carrying one operation per HTTP method.
@@ -23,13 +25,20 @@ type PathItem struct {
 }
 
 // Operation describes one endpoint.
+//
+// Security is a pointer-to-slice so we can distinguish three states: nil
+// means "inherit the document-level default", a non-nil empty slice means
+// "explicitly clear security for this operation" (emits "security": []),
+// and a non-empty slice lists the alternative requirements that satisfy
+// the operation.
 type Operation struct {
-	Tags        []string             `json:"tags,omitempty"`
-	Summary     string               `json:"summary,omitempty"`
-	Description string               `json:"description,omitempty"`
-	Parameters  []*Parameter         `json:"parameters,omitempty"`
-	RequestBody *RequestBody         `json:"requestBody,omitempty"`
-	Responses   map[string]*Response `json:"responses"`
+	Tags        []string               `json:"tags,omitempty"`
+	Summary     string                 `json:"summary,omitempty"`
+	Description string                 `json:"description,omitempty"`
+	Parameters  []*Parameter           `json:"parameters,omitempty"`
+	RequestBody *RequestBody           `json:"requestBody,omitempty"`
+	Responses   map[string]*Response   `json:"responses"`
+	Security    *[]SecurityRequirement `json:"security,omitempty"`
 }
 
 // Parameter is a path, query, or header parameter.
@@ -84,7 +93,56 @@ type Header struct {
 
 // Components is the document's reusable-definitions block.
 type Components struct {
-	Schemas map[string]*Schema `json:"schemas,omitempty"`
+	Schemas         map[string]*Schema         `json:"schemas,omitempty"`
+	SecuritySchemes map[string]*SecurityScheme `json:"securitySchemes,omitempty"`
+}
+
+// SecurityRequirement is a map from security scheme name (or URI) to the
+// list of scopes (oauth2/openIdConnect) or role names required to satisfy
+// it. Multiple keys within a single requirement are AND-combined; multiple
+// SecurityRequirement entries in an array are OR-combined.
+type SecurityRequirement map[string][]string
+
+// SecurityScheme defines a single auth mechanism that operations may
+// reference by name. Per OAS 3.2 §4.27, Type is one of "apiKey", "http",
+// "mutualTLS", "oauth2", "openIdConnect"; the field set required varies
+// by Type and is enforced by the spec rather than this struct.
+//
+// OAS 3.2 additions: oauth2MetadataUrl (oauth2) and the deviceAuthorization
+// OAuth flow.
+type SecurityScheme struct {
+	Type              string      `json:"type"`
+	Description       string      `json:"description,omitempty"`
+	Name              string      `json:"name,omitempty"`
+	In                string      `json:"in,omitempty"`
+	Scheme            string      `json:"scheme,omitempty"`
+	BearerFormat      string      `json:"bearerFormat,omitempty"`
+	Flows             *OAuthFlows `json:"flows,omitempty"`
+	OpenIDConnectURL  string      `json:"openIdConnectUrl,omitempty"`
+	OAuth2MetadataURL string      `json:"oauth2MetadataUrl,omitempty"`
+	Deprecated        bool        `json:"deprecated,omitempty"`
+}
+
+// OAuthFlows enumerates the OAuth2 flows a security scheme supports. OAS
+// 3.2 introduces DeviceAuthorization (RFC 8628) alongside the four classic
+// flows.
+type OAuthFlows struct {
+	Implicit            *OAuthFlow `json:"implicit,omitempty"`
+	Password            *OAuthFlow `json:"password,omitempty"`
+	ClientCredentials   *OAuthFlow `json:"clientCredentials,omitempty"`
+	AuthorizationCode   *OAuthFlow `json:"authorizationCode,omitempty"`
+	DeviceAuthorization *OAuthFlow `json:"deviceAuthorization,omitempty"`
+}
+
+// OAuthFlow is a single OAuth flow's configuration. The URL fields apply
+// only to certain flows per OAS 3.2 §4.29; Scopes is required and emitted
+// even when empty.
+type OAuthFlow struct {
+	AuthorizationURL       string            `json:"authorizationUrl,omitempty"`
+	DeviceAuthorizationURL string            `json:"deviceAuthorizationUrl,omitempty"`
+	TokenURL               string            `json:"tokenUrl,omitempty"`
+	RefreshURL             string            `json:"refreshUrl,omitempty"`
+	Scopes                 map[string]string `json:"scopes"`
 }
 
 // Schema is a JSON Schema 2020-12 fragment. Only the fields minmux emits are

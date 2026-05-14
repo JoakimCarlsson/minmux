@@ -16,7 +16,7 @@ You install only the modules you use.
 
 | Module | Purpose |
 |---|---|
-| `openapi` | OpenAPI 3.2 spec generation from explicit endpoint annotations, with auto-mapped numeric formats (int32/int64/float/double), a `format:"..."` struct tag for string formats (email, password, uuid, ...), and streaming options (`StreamsBody[T]`, `SSEStream[T]`, `MultipartMixedStream[T]`) that emit `itemSchema` / `itemEncoding` / `prefixEncoding`. Depends on `router`. |
+| `openapi` | OpenAPI 3.2 spec generation from explicit endpoint annotations, with auto-mapped numeric formats (int32/int64/float/double), a `format:"..."` struct tag for string formats (email, password, uuid, ...), streaming options (`StreamsBody[T]`, `SSEStream[T]`, `MultipartMixedStream[T]`) that emit `itemSchema` / `itemEncoding` / `prefixEncoding`, and the full OAS 3.2 security model (`apiKey`, `http`, `mutualTLS`, `oauth2` incl. `deviceAuthorization`, `openIdConnect`) with declarative document-level and per-endpoint requirements. Depends on `router`. |
 
 ## Middleware
 

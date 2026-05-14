@@ -8,11 +8,18 @@ import (
 
 // endpointMeta is the OpenAPI annotation data attached to a router.Endpoint
 // via options. Stored in Endpoint.Metadata keyed by metaKey{}.
+//
+// Security accumulates the alternative Security Requirement Objects this
+// operation accepts. SecurityOverride flags an explicit clear (NoSecurity),
+// which causes buildOperation to emit "security": [] even when Security is
+// empty so that the operation overrides any document-level default.
 type endpointMeta struct {
-	Summary     string
-	Description string
-	Tags        []string
-	Responses   []ResponseDecl
+	Summary          string
+	Description      string
+	Tags             []string
+	Responses        []ResponseDecl
+	Security         []SecurityRequirement
+	SecurityOverride bool
 }
 
 // streamKind classifies how a ResponseDecl should be emitted.
@@ -231,5 +238,124 @@ func MultipartMixedStream[T any](
 			opt(&decl)
 		}
 		m.Responses = append(m.Responses, decl)
+	}
+}
+
+// Security adds one Security Requirement Object naming a single scheme.
+// Multiple Security calls on the same endpoint accumulate as alternatives
+// (OR-combined): a request satisfying any one of them is authorized.
+// Scopes apply when the named scheme is of type oauth2 or openIdConnect;
+// for other types they convey role names.
+//
+// When used as a group option, the requirement cascades to every endpoint
+// registered through that group. Use NoSecurity on an individual endpoint
+// to override an inherited default.
+func Security(scheme string, scopes ...string) router.Option {
+	req := SecurityRequirement{scheme: append([]string{}, scopes...)}
+	return func(ep *router.Endpoint) {
+		m := writeMeta(ep)
+		m.Security = append(m.Security, req)
+	}
+}
+
+// SecurityAll adds one Security Requirement Object listing multiple
+// schemes that must all be satisfied together (AND-combined within the
+// single requirement). Use this when a request must present, for example,
+// both an API key and a signature header.
+//
+// Subsequent Security / SecurityAll / OptionalSecurity calls accumulate
+// as additional OR alternatives.
+func SecurityAll(req SecurityRequirement) router.Option {
+	copyReq := make(SecurityRequirement, len(req))
+	for k, v := range req {
+		copyReq[k] = append([]string{}, v...)
+	}
+	return func(ep *router.Endpoint) {
+		m := writeMeta(ep)
+		m.Security = append(m.Security, copyReq)
+	}
+}
+
+// OptionalSecurity appends the empty Security Requirement Object ({}),
+// per OAS 3.2 §4.30 making anonymous access an allowed alternative
+// alongside any other declared requirements.
+func OptionalSecurity() router.Option {
+	return func(ep *router.Endpoint) {
+		m := writeMeta(ep)
+		m.Security = append(m.Security, SecurityRequirement{})
+	}
+}
+
+// NoSecurity emits "security": [] on the operation, clearing any
+// document-level or group-level default and explicitly declaring the
+// endpoint as unauthenticated. Any Security / SecurityAll /
+// OptionalSecurity options previously applied to the endpoint are
+// discarded.
+func NoSecurity() router.Option {
+	return func(ep *router.Endpoint) {
+		m := writeMeta(ep)
+		m.Security = nil
+		m.SecurityOverride = true
+	}
+}
+
+// BasicAuth returns an HTTP Basic Security Scheme (RFC 7617).
+func BasicAuth(description string) *SecurityScheme {
+	return &SecurityScheme{
+		Type:        "http",
+		Scheme:      "basic",
+		Description: description,
+	}
+}
+
+// BearerAuth returns an HTTP Bearer Security Scheme (RFC 6750). The
+// bearerFormat is a free-form hint (commonly "JWT"); pass "" to omit it.
+func BearerAuth(bearerFormat, description string) *SecurityScheme {
+	return &SecurityScheme{
+		Type:         "http",
+		Scheme:       "bearer",
+		BearerFormat: bearerFormat,
+		Description:  description,
+	}
+}
+
+// APIKey returns an API key Security Scheme. The in argument selects the
+// transport: "header", "query", or "cookie".
+func APIKey(in, name, description string) *SecurityScheme {
+	return &SecurityScheme{
+		Type:        "apiKey",
+		In:          in,
+		Name:        name,
+		Description: description,
+	}
+}
+
+// OAuth2Scheme returns an OAuth2 Security Scheme. The caller builds the
+// OAuthFlows directly so each flow can carry the URL set it requires
+// (deviceAuthorization is OAS 3.2's new flow).
+func OAuth2Scheme(flows *OAuthFlows, description string) *SecurityScheme {
+	return &SecurityScheme{
+		Type:        "oauth2",
+		Flows:       flows,
+		Description: description,
+	}
+}
+
+// OpenIDConnect returns an OpenID Connect Discovery Security Scheme. The
+// url MUST point at the provider's well-known configuration document.
+func OpenIDConnect(url, description string) *SecurityScheme {
+	return &SecurityScheme{
+		Type:             "openIdConnect",
+		OpenIDConnectURL: url,
+		Description:      description,
+	}
+}
+
+// MutualTLS returns a mutual-TLS Security Scheme (OAS 3.1+; client cert
+// auth). No additional fields beyond the description are required.
+func MutualTLS(description string) *SecurityScheme {
+	return &SecurityScheme{
+		Type:        "mutualTLS",
+		Description: description,
 	}
 }

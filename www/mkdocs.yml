@@ -45,5 +45,6 @@ nav:
     - Installation: getting-started/installation.md
     - Quick Start: getting-started/quick-start.md
   - Streaming: streaming.md
+  - Security: security.md
   - Caching:
     - Output Cache: caching/outputcache.md

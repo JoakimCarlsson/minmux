@@ -28,6 +28,13 @@ compatible. Ships as independent modules — pull only what you need.
   emit OAS 3.2 `itemSchema` / `itemEncoding` / `prefixEncoding`. Streaming
   request bodies bind to `iter.Seq2[T, error]`. See
   [Streaming](streaming.md).
+- **Declarative security.** Register `apiKey`, HTTP Basic / Bearer,
+  `mutualTLS`, OAuth2 (including the OAS 3.2 `deviceAuthorization`
+  flow), and OpenID Connect on the `Generator`. Set a document-level
+  default; override per group or endpoint with
+  `openapi.Security`, `openapi.SecurityAll`,
+  `openapi.OptionalSecurity`, and `openapi.NoSecurity`. See
+  [Security](security.md).
 - **Multi-module.** `router` is the runtime, `openapi` is the spec
   generator. Independent versioning; the router has zero dependencies on
   the openapi package.

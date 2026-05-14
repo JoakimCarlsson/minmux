@@ -51,6 +51,12 @@ Sending `GET /users/42` produces `{"id": 42}`. A non-integer path value
 like `/users/abc` automatically returns a 400 ProblemDetails — the
 binder rejects unparseable values before the handler runs.
 
+A handler that doesn't bind a path variable is still valid — the
+OpenAPI generator auto-fills any unbound `{name}` template segment with
+a required `string` path parameter so the spec stays conformant to
+OAS 3.2 §4.4.1.1. Bind a Params field with `path:"name"` when you want
+a richer schema or a typed value in your handler.
+
 ## Query parameters
 
 Same pattern, different tag:
@@ -285,6 +291,11 @@ use the dedicated `openapi.StreamsBody[T]`, `openapi.SSEStream[T]`, and
 `openapi.MultipartMixedStream[T]` options paired with the matching
 `c.Stream` / `c.SSE` / `c.MultipartMixed` runtime helpers — see the
 [Streaming](../streaming.md) page.
+
+For authenticated APIs, register security schemes on the generator and
+declare per-endpoint requirements with `openapi.Security`,
+`openapi.SecurityAll`, `openapi.OptionalSecurity`, and
+`openapi.NoSecurity` — see the [Security](../security.md) page.
 
 ## Full example
 

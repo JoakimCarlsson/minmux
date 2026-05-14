@@ -319,6 +319,64 @@ func TestSpec_PathParam(t *testing.T) {
 	}
 }
 
+func TestSpec_PathParamAutoFilledWhenHandlerIgnoresIt(t *testing.T) {
+	r := router.New()
+	r.Get("/items/{id}", noop)
+
+	op := operation(t, r, "/items/{id}", "GET")
+	if len(op.Parameters) != 1 {
+		t.Fatalf("want 1 auto-filled param, got %d", len(op.Parameters))
+	}
+	p := op.Parameters[0]
+	if p.Name != "id" || p.In != "path" || !p.Required {
+		t.Errorf("auto-filled path param: %+v", p)
+	}
+	if p.Schema == nil || p.Schema.Type != "string" {
+		t.Errorf("auto-filled schema should be string, got %+v", p.Schema)
+	}
+}
+
+func TestSpec_PathParamAutoFillSkipsAlreadyBoundNames(t *testing.T) {
+	r := router.New()
+	r.Get("/items/{id}/parts/{part}", noopP[pathParams])
+
+	op := operation(t, r, "/items/{id}/parts/{part}", "GET")
+	if len(op.Parameters) != 2 {
+		t.Fatalf("want 2 params (one bound, one auto-filled), got %d: %+v",
+			len(op.Parameters), op.Parameters)
+	}
+	byName := map[string]*Parameter{}
+	for _, p := range op.Parameters {
+		byName[p.Name] = p
+	}
+	if byName["id"].Schema.Type != "integer" {
+		t.Errorf("bound id should keep its int schema: %+v", byName["id"])
+	}
+	if byName["part"].Schema.Type != "string" {
+		t.Errorf("auto-filled part should be string: %+v", byName["part"])
+	}
+}
+
+func TestSpec_PathParamWildcardAndAnchor(t *testing.T) {
+	r := router.New()
+	r.Get("/files/{path...}", noop)
+	r.Get("/anchor/{$}", noop)
+
+	op := operation(t, r, "/files/{path...}", "GET")
+	if len(op.Parameters) != 1 {
+		t.Fatalf("wildcard: want 1 param, got %d", len(op.Parameters))
+	}
+	if op.Parameters[0].Name != "path" {
+		t.Errorf("wildcard name should drop ellipsis: %+v", op.Parameters[0])
+	}
+
+	op = operation(t, r, "/anchor/{$}", "GET")
+	if len(op.Parameters) != 0 {
+		t.Errorf("end-of-path anchor must not emit a parameter: %+v",
+			op.Parameters)
+	}
+}
+
 func TestSpec_QueryParams(t *testing.T) {
 	r := router.New()
 	r.Get("/items", noopP[queryParams])
