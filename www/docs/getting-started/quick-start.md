@@ -106,6 +106,56 @@ Renderers like Scalar and Swagger UI style deprecated parameters and
 operations distinctly (strikethrough, banner) so consumers see them at a
 glance.
 
+## Panic recovery
+
+A panic in a handler bubbles up through `net/http` and returns a bare
+500 with a Go-style stack trace. Wire `router.Recover()` at the top of
+the middleware chain so panics become 500 ProblemDetails responses
+with the stack logged separately:
+
+```go
+r := router.New()
+r.Use(router.Recover())
+```
+
+`router.Recover` honors `http.ErrAbortHandler` — it re-panics so
+`net/http`'s connection-close behavior still works. It defaults to
+`log.Default()` for stack logging; use `router.RecoverWith(logger)` to
+pass a custom `*log.Logger`.
+
+Note: if a handler has already written response headers before
+panicking, the 500 body can't be cleanly emitted — net/http will have
+flushed the earlier status. The panic is still logged. Streaming
+handlers that panic mid-stream will simply close the connection.
+
+## Middleware
+
+`Router.Use` attaches a middleware to *every* request — useful for
+logging, CORS, recovery, etc. For middleware that should run only on
+specific routes, use the `router.Middleware(...)` option, which works
+at both endpoint and group scope:
+
+```go
+// One route only.
+r.Get("/admin/stats", stats,
+    router.Middleware(requireAdmin),
+)
+
+// Whole group — cascades to every route registered through it.
+api := r.Group("/api", router.Middleware(requestID))
+
+api.Get("/users/{id}", getUser,
+    // Route-level middleware composes on top of the group's.
+    // Order at runtime: requestID → rateLimit → handler.
+    router.Middleware(rateLimit),
+)
+```
+
+The middleware signature is the standard `func(http.Handler) http.Handler`,
+so the entire stdlib middleware ecosystem (and the `cors`,
+`outputcache` modules) plug in directly. The first middleware in the
+slice is the outermost wrapper — same order as `Router.Use`.
+
 ## External docs links
 
 OpenAPI lets you attach a "see also" link at three scopes; minmux

@@ -160,7 +160,12 @@ func (r *Router) register(
 		opt(ep)
 	}
 	r.endpoints = append(r.endpoints, ep)
-	r.mux.HandleFunc(method+" "+full, dispatch)
+
+	var h http.Handler = http.HandlerFunc(dispatch)
+	for i := len(ep.Middleware) - 1; i >= 0; i-- {
+		h = ep.Middleware[i](h)
+	}
+	r.mux.Handle(method+" "+full, h)
 	return ep
 }
 

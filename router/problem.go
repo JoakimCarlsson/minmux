@@ -65,3 +65,13 @@ func Forbidden(detail string) *ProblemDetails {
 		Detail: detail,
 	}
 }
+
+// InternalServerError builds a 500 ProblemDetails. Used by Recover when
+// catching panics from downstream handlers.
+func InternalServerError(detail string) *ProblemDetails {
+	return &ProblemDetails{
+		Status: http.StatusInternalServerError,
+		Title:  http.StatusText(http.StatusInternalServerError),
+		Detail: detail,
+	}
+}

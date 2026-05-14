@@ -220,6 +220,10 @@ func frames(c *router.Context) {
 
 func main() {
 	r := router.New()
+	// Production-readiness: catch panics from any handler, log with
+	// stack, and reply with a 500 ProblemDetails instead of a bare
+	// Go-style 500 page.
+	r.Use(router.Recover())
 
 	gen := openapi.NewGenerator(openapi.Info{
 		Title:   "minmux Showcase",
@@ -394,9 +398,24 @@ func main() {
 		),
 	)
 
+	// requestIDMW illustrates per-route middleware: it stamps every
+	// response with a synthetic X-Request-Id. Applied as a group option
+	// so it cascades to every pet operation.
+	requestIDMW := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			id := req.Header.Get("X-Request-Id")
+			if id == "" {
+				id = fmt.Sprintf("req-%d", time.Now().UnixNano())
+			}
+			w.Header().Set("X-Request-Id", id)
+			next.ServeHTTP(w, req)
+		})
+	}
+
 	pets := r.Group("/pets",
 		openapi.Tags("Pets"),
 		openapi.Security("petstoreOAuth", "read:pets"),
+		router.Middleware(requestIDMW),
 	)
 
 	pets.Get(
