@@ -2,7 +2,7 @@ package openapi
 
 // Document is the root OpenAPI document. Field order in JSON output follows
 // the conventional OpenAPI 3.2 layout: openapi, info, dialect, servers,
-// paths, components, security.
+// paths, components, security, tags, externalDocs.
 type Document struct {
 	OpenAPI           string                `json:"openapi"`
 	Info              Info                  `json:"info"`
@@ -11,6 +11,30 @@ type Document struct {
 	Paths             map[string]*PathItem  `json:"paths"`
 	Components        *Components           `json:"components,omitempty"`
 	Security          []SecurityRequirement `json:"security,omitempty"`
+	Tags              []*Tag                `json:"tags,omitempty"`
+	ExternalDocs      *ExternalDocs         `json:"externalDocs,omitempty"`
+}
+
+// Tag is a Tag Object — operation-grouping metadata referenced by name
+// from individual operations. OAS 3.2 promotes the Tag Object to a
+// first-class navigational element: Summary is a short human label,
+// Parent references another tag to build nested groups (one of 3.2's
+// headline features), and Kind is a free-form classifier (e.g. "nav",
+// "audience") that lets renderers decide how to surface the tag.
+type Tag struct {
+	Name         string        `json:"name"`
+	Summary      string        `json:"summary,omitempty"`
+	Description  string        `json:"description,omitempty"`
+	Parent       string        `json:"parent,omitempty"`
+	Kind         string        `json:"kind,omitempty"`
+	ExternalDocs *ExternalDocs `json:"externalDocs,omitempty"`
+}
+
+// ExternalDocs links out to additional human-readable documentation
+// for a tag, operation, or document as a whole.
+type ExternalDocs struct {
+	URL         string `json:"url"`
+	Description string `json:"description,omitempty"`
 }
 
 // Server is one entry in the document-level servers array (OAS 3.2 §4.7).

@@ -223,12 +223,77 @@ func main() {
 
 	gen := openapi.NewGenerator(openapi.Info{
 		Title:   "minmux Showcase",
+		Summary: "Browseable surface area for minmux's OAS 3.2 generator",
 		Version: "0.1.0",
 		Description: "A broad surface area for the Scalar UI to render — " +
 			"params, formats, ProblemDetails, every OAS 3.2 security " +
 			"scheme (incl. deviceAuthorization), and SSE / JSONL / " +
 			"multipart/mixed streams.",
+		TermsOfService: "https://example.com/tos",
+		Contact: &openapi.Contact{
+			Name:  "minmux maintainers",
+			URL:   "https://github.com/joakimcarlsson/minmux/issues",
+			Email: "noreply@example.com",
+		},
+		License: &openapi.License{
+			Name:       "MIT",
+			Identifier: "MIT",
+		},
 	})
+
+	// Document-level Tag Objects — OAS 3.2 promotes tags to a structured
+	// navigation element. Parent builds nested groups; Kind hints to the
+	// renderer how the tag is meant to surface (here, "nav" = navigation).
+	gen.Tags = []*openapi.Tag{
+		{
+			Name:        "Catalog",
+			Summary:     "Resources",
+			Description: "Domain resources exposed by the API.",
+			Kind:        "nav",
+		},
+		{
+			Name:        "Pets",
+			Parent:      "Catalog",
+			Summary:     "Pets",
+			Description: "CRUD over pets, including a deprecated legacy listing.",
+		},
+		{
+			Name:        "Users",
+			Parent:      "Catalog",
+			Summary:     "Users",
+			Description: "Authenticated user profile and password rotation.",
+		},
+		{
+			Name:        "Realtime",
+			Summary:     "Realtime",
+			Description: "Streaming endpoints.",
+			Kind:        "nav",
+		},
+		{
+			Name:        "Streams",
+			Parent:      "Realtime",
+			Summary:     "SSE / JSONL / multipart",
+			Description: "Server-sent events, JSON Lines, and multipart/mixed streams.",
+			ExternalDocs: &openapi.ExternalDocs{
+				URL:         "https://github.com/joakimcarlsson/minmux/blob/main/www/docs/streaming.md",
+				Description: "Streaming reference",
+			},
+		},
+		{
+			Name:        "Auth",
+			Summary:     "Auth flows",
+			Description: "Authentication and authorization flows (incl. RFC 8628 device authorization).",
+		},
+		{
+			Name:        "Meta",
+			Summary:     "Health & metadata",
+			Description: "Liveness probes and other observability endpoints.",
+		},
+	}
+	gen.ExternalDocs = &openapi.ExternalDocs{
+		URL:         "https://github.com/joakimcarlsson/minmux",
+		Description: "minmux on GitHub",
+	}
 
 	// Document-level servers — Scalar (and any OAS UI) renders a base-URL
 	// selector and pre-fills "Try it" requests against the chosen entry.

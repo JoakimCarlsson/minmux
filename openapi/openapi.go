@@ -23,11 +23,40 @@ var (
 	sseEventType      = reflect.TypeFor[router.SSEEvent]()
 )
 
-// Info is the OpenAPI document info block.
+// Info is the OpenAPI document info block. OAS 3.2 fields:
+//
+//   - Title, Version are required.
+//   - Summary is a short one-line label (3.1+); Description is long-form
+//     CommonMark.
+//   - TermsOfService is a URL to the API's terms of service.
+//   - Contact and License describe the API publisher and licensing.
+//
+// Renderers like Scalar surface this block prominently above the
+// operations list.
 type Info struct {
-	Title       string `json:"title"`
-	Version     string `json:"version"`
-	Description string `json:"description,omitempty"`
+	Title          string   `json:"title"`
+	Version        string   `json:"version"`
+	Summary        string   `json:"summary,omitempty"`
+	Description    string   `json:"description,omitempty"`
+	TermsOfService string   `json:"termsOfService,omitempty"`
+	Contact        *Contact `json:"contact,omitempty"`
+	License        *License `json:"license,omitempty"`
+}
+
+// Contact is the API publisher's contact info.
+type Contact struct {
+	Name  string `json:"name,omitempty"`
+	URL   string `json:"url,omitempty"`
+	Email string `json:"email,omitempty"`
+}
+
+// License describes the API's licensing. OAS 3.1+ allows Identifier
+// (SPDX expression) as an alternative to URL; the spec mandates they
+// are mutually exclusive — set only one.
+type License struct {
+	Name       string `json:"name"`
+	Identifier string `json:"identifier,omitempty"`
+	URL        string `json:"url,omitempty"`
 }
 
 // Generator builds OpenAPI 3.2 specs from a router by reading the openapi
@@ -43,9 +72,18 @@ type Info struct {
 // Servers populates the document-level servers array. Renderers like
 // Scalar and Swagger UI use this to offer a base-URL selector and to
 // pre-fill the host portion of "Try it out" requests.
+//
+// Tags populates the document-level Tag Object array, giving operation
+// tags real metadata (summary, description, parent → nested groups,
+// externalDocs). Operations still reference tags by string name via
+// openapi.Tags(...); the Document.Tags entries supply the structured
+// rendering metadata for each name. ExternalDocs is the document-level
+// "see also" link.
 type Generator struct {
 	Info            Info
 	Servers         []*Server
+	Tags            []*Tag
+	ExternalDocs    *ExternalDocs
 	SecuritySchemes map[string]*SecurityScheme
 	Security        []SecurityRequirement
 }
@@ -75,6 +113,8 @@ func (g *Generator) Spec(r *router.Router) *Document {
 		Servers:           g.Servers,
 		Paths:             paths,
 		Security:          g.Security,
+		Tags:              g.Tags,
+		ExternalDocs:      g.ExternalDocs,
 	}
 	if len(b.components) > 0 || len(g.SecuritySchemes) > 0 {
 		doc.Components = &Components{}

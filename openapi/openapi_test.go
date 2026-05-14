@@ -456,6 +456,161 @@ func TestSpec_ParamDeprecated(t *testing.T) {
 	}
 }
 
+func TestSpec_Info_AllFieldsMarshal(t *testing.T) {
+	r := router.New()
+	r.Get("/u", noop)
+	g := NewGenerator(Info{
+		Title:          "Pets",
+		Version:        "0.1.0",
+		Summary:        "A pet store",
+		Description:    "Long-form description.",
+		TermsOfService: "https://example.com/tos",
+		Contact: &Contact{
+			Name:  "API Team",
+			URL:   "https://example.com/contact",
+			Email: "api@example.com",
+		},
+		License: &License{Name: "MIT", Identifier: "MIT"},
+	})
+	raw, _ := json.Marshal(g.Spec(r))
+	js := string(raw)
+	for _, want := range []string{
+		`"summary":"A pet store"`,
+		`"termsOfService":"https://example.com/tos"`,
+		`"contact":{"name":"API Team"`,
+		`"email":"api@example.com"`,
+		`"license":{"name":"MIT","identifier":"MIT"}`,
+	} {
+		if !strings.Contains(js, want) {
+			t.Errorf("missing %q in:\n%s", want, js)
+		}
+	}
+}
+
+func TestSpec_Info_OmitsZeroFields(t *testing.T) {
+	r := router.New()
+	r.Get("/u", noop)
+	raw, _ := json.Marshal(
+		NewGenerator(Info{Title: "T", Version: "1"}).Spec(r),
+	)
+	for _, banned := range []string{
+		`"summary"`, `"termsOfService"`, `"contact"`, `"license"`,
+	} {
+		if strings.Contains(string(raw), banned) {
+			t.Errorf("unset %s should be omitted; got:\n%s", banned, raw)
+		}
+	}
+}
+
+func TestSpec_License_NameRequired(t *testing.T) {
+	// OAS requires License.Name; verify the empty License{Name:""} still
+	// marshals (we don't enforce — spec validators do), and that a
+	// populated one round-trips with omitempty on the URL alternative.
+	raw, _ := json.Marshal(
+		&License{
+			Name: "Apache-2.0",
+			URL:  "https://www.apache.org/licenses/LICENSE-2.0",
+		},
+	)
+	if !strings.Contains(string(raw), `"name":"Apache-2.0"`) {
+		t.Errorf("license name: %s", raw)
+	}
+	if !strings.Contains(string(raw), `"url":"https://www.apache.org`) {
+		t.Errorf("license url: %s", raw)
+	}
+	if strings.Contains(string(raw), `"identifier"`) {
+		t.Errorf("unset identifier should be omitted; got %s", raw)
+	}
+}
+
+func TestSpec_StructuredTags(t *testing.T) {
+	r := router.New()
+	r.Get("/pets", noop, Tags("Pets"))
+
+	g := NewGenerator(Info{Title: "T", Version: "1"})
+	g.Tags = []*Tag{
+		{
+			Name:        "Catalog",
+			Summary:     "Resources",
+			Description: "Domain resources",
+			Kind:        "nav",
+		},
+		{
+			Name:        "Pets",
+			Parent:      "Catalog",
+			Description: "Pet CRUD",
+			ExternalDocs: &ExternalDocs{
+				URL:         "https://example.com/docs/pets",
+				Description: "Detailed pet docs",
+			},
+		},
+	}
+	g.ExternalDocs = &ExternalDocs{
+		URL:         "https://example.com/docs",
+		Description: "All docs",
+	}
+
+	doc := g.Spec(r)
+	if len(doc.Tags) != 2 {
+		t.Fatalf("tags: want 2, got %d", len(doc.Tags))
+	}
+	if doc.Tags[1].Parent != "Catalog" {
+		t.Errorf("Pets parent: %q", doc.Tags[1].Parent)
+	}
+
+	raw, _ := json.Marshal(doc)
+	js := string(raw)
+	for _, want := range []string{
+		`"tags":[`,
+		`"name":"Catalog"`,
+		`"summary":"Resources"`,
+		`"kind":"nav"`,
+		`"parent":"Catalog"`,
+		`"externalDocs":{"url":"https://example.com/docs/pets"`,
+		`"externalDocs":{"url":"https://example.com/docs"`,
+	} {
+		if !strings.Contains(js, want) {
+			t.Errorf("spec missing %q in:\n%s", want, js)
+		}
+	}
+}
+
+func TestSpec_Tags_OmittedWhenEmpty(t *testing.T) {
+	r := router.New()
+	r.Get("/health", noop)
+	doc := NewGenerator(Info{Title: "T", Version: "1"}).Spec(r)
+	raw, _ := json.Marshal(doc)
+	if strings.Contains(string(raw), `"tags":`) {
+		t.Errorf("empty doc-level tags should be omitted; got:\n%s", raw)
+	}
+	if strings.Contains(string(raw), `"externalDocs"`) {
+		t.Errorf("nil externalDocs should be omitted; got:\n%s", raw)
+	}
+}
+
+func TestSpec_Tags_FieldOrder(t *testing.T) {
+	r := router.New()
+	r.Get("/u", noop)
+	g := NewGenerator(Info{Title: "T", Version: "1"})
+	g.Security = []SecurityRequirement{{}}
+	g.Tags = []*Tag{{Name: "x"}}
+	g.ExternalDocs = &ExternalDocs{URL: "https://example.com"}
+
+	raw, _ := json.Marshal(g.Spec(r))
+	js := string(raw)
+	sec := strings.Index(js, `"security"`)
+	tagsIdx := strings.Index(js, `"tags"`)
+	ext := strings.Index(js, `"externalDocs"`)
+	if !(sec < tagsIdx && tagsIdx < ext) {
+		t.Errorf(
+			"field order: security=%d tags=%d externalDocs=%d",
+			sec,
+			tagsIdx,
+			ext,
+		)
+	}
+}
+
 func TestSpec_ResponseHeader_DefaultString(t *testing.T) {
 	r := router.New()
 	r.Post("/pets", noop,

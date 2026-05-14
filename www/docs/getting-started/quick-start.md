@@ -106,6 +106,88 @@ Renderers like Scalar and Swagger UI style deprecated parameters and
 operations distinctly (strikethrough, banner) so consumers see them at a
 glance.
 
+## Document metadata
+
+The `Info` block carries the API's public identity. Beyond `Title` /
+`Version` / `Description`, minmux supports the full OAS 3.2 Info
+Object:
+
+```go
+gen := openapi.NewGenerator(openapi.Info{
+    Title:          "Pets API",
+    Version:        "0.1.0",
+    Summary:        "Pet store catalog and management",
+    Description:    "Long-form Markdown describing the API…",
+    TermsOfService: "https://example.com/tos",
+    Contact: &openapi.Contact{
+        Name:  "API Team",
+        URL:   "https://example.com/contact",
+        Email: "api@example.com",
+    },
+    License: &openapi.License{
+        Name:       "Apache-2.0",
+        Identifier: "Apache-2.0", // SPDX expression (3.1+)
+        // or URL: "https://www.apache.org/licenses/LICENSE-2.0"
+    },
+})
+```
+
+`License.Identifier` (SPDX) and `License.URL` are mutually exclusive per
+spec — set one. Scalar surfaces all of these in the API reference
+header.
+
+## Structured tags
+
+`openapi.Tags("Pets")` on a route attaches a string label to the
+operation. To give that label real metadata — a description, an
+external-docs link, or a parent for nested navigation — declare a Tag
+Object on the generator:
+
+```go
+gen := openapi.NewGenerator(openapi.Info{Title: "API", Version: "0.1.0"})
+
+gen.Tags = []*openapi.Tag{
+    {
+        Name:        "Catalog",
+        Summary:     "Resources",
+        Description: "Domain resources exposed by the API.",
+        Kind:        "nav",
+    },
+    {
+        Name:        "Pets",
+        Parent:      "Catalog",
+        Description: "Pet CRUD.",
+    },
+    {
+        Name:        "Users",
+        Parent:      "Catalog",
+        Description: "Authenticated user profile.",
+    },
+    {
+        Name:        "Streams",
+        Description: "SSE / JSONL / multipart streams.",
+        ExternalDocs: &openapi.ExternalDocs{
+            URL:         "https://example.com/docs/streaming",
+            Description: "Streaming reference",
+        },
+    },
+}
+
+gen.ExternalDocs = &openapi.ExternalDocs{
+    URL: "https://github.com/example/api",
+}
+```
+
+`Parent` is one of OAS 3.2's headline features — it builds nested tag
+groups so renderers like Scalar can show a real navigation tree
+("Catalog → Pets") instead of a flat list. `Kind` is a free-form
+classifier (`"nav"` for navigation grouping is the common convention).
+`ExternalDocs` attaches a "see also" link to the tag.
+
+Tag names referenced by operations (`openapi.Tags("Pets")`) match by
+string against the `Name` field of these Tag Objects — operations don't
+need to change when you switch from bare strings to structured tags.
+
 ## Schema constraints
 
 Struct-field tags map 1:1 to the OAS schema keywords most clients care
