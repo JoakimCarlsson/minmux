@@ -456,6 +456,53 @@ func TestSpec_ParamDeprecated(t *testing.T) {
 	}
 }
 
+func TestSpec_OperationExternalDocs(t *testing.T) {
+	r := router.New()
+	r.Get(
+		"/pets",
+		noop,
+		ExternalDocsLink(
+			"https://docs.example.com/pets",
+			"Pet ranking details",
+		),
+	)
+	op := operation(t, r, "/pets", "GET")
+	if op.ExternalDocs == nil {
+		t.Fatal("operation externalDocs missing")
+	}
+	if op.ExternalDocs.URL != "https://docs.example.com/pets" {
+		t.Errorf("url: %q", op.ExternalDocs.URL)
+	}
+	if op.ExternalDocs.Description != "Pet ranking details" {
+		t.Errorf("description: %q", op.ExternalDocs.Description)
+	}
+}
+
+func TestSpec_OperationExternalDocs_EmptyURLClears(t *testing.T) {
+	r := router.New()
+	r.Get("/pets", noop,
+		ExternalDocsLink("https://example.com", "should be cleared"),
+		ExternalDocsLink("", ""),
+	)
+	op := operation(t, r, "/pets", "GET")
+	if op.ExternalDocs != nil {
+		t.Errorf(
+			"ExternalDocsLink(\"\", ...) should clear; got %+v",
+			op.ExternalDocs,
+		)
+	}
+}
+
+func TestSpec_OperationExternalDocs_OmittedWhenUnset(t *testing.T) {
+	r := router.New()
+	r.Get("/pets", noop)
+	op := operation(t, r, "/pets", "GET")
+	raw, _ := json.Marshal(op)
+	if strings.Contains(string(raw), `"externalDocs"`) {
+		t.Errorf("unset externalDocs should be omitted; got:\n%s", raw)
+	}
+}
+
 func TestSpec_Info_AllFieldsMarshal(t *testing.T) {
 	r := router.New()
 	r.Get("/u", noop)

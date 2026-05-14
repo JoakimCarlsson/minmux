@@ -74,15 +74,16 @@ type PathItem struct {
 // and a non-empty slice lists the alternative requirements that satisfy
 // the operation.
 type Operation struct {
-	Tags        []string               `json:"tags,omitempty"`
-	Summary     string                 `json:"summary,omitempty"`
-	Description string                 `json:"description,omitempty"`
-	OperationID string                 `json:"operationId,omitempty"`
-	Deprecated  bool                   `json:"deprecated,omitempty"`
-	Parameters  []*Parameter           `json:"parameters,omitempty"`
-	RequestBody *RequestBody           `json:"requestBody,omitempty"`
-	Responses   map[string]*Response   `json:"responses"`
-	Security    *[]SecurityRequirement `json:"security,omitempty"`
+	Tags         []string               `json:"tags,omitempty"`
+	Summary      string                 `json:"summary,omitempty"`
+	Description  string                 `json:"description,omitempty"`
+	ExternalDocs *ExternalDocs          `json:"externalDocs,omitempty"`
+	OperationID  string                 `json:"operationId,omitempty"`
+	Deprecated   bool                   `json:"deprecated,omitempty"`
+	Parameters   []*Parameter           `json:"parameters,omitempty"`
+	RequestBody  *RequestBody           `json:"requestBody,omitempty"`
+	Responses    map[string]*Response   `json:"responses"`
+	Security     *[]SecurityRequirement `json:"security,omitempty"`
 }
 
 // Parameter is a path, query, or header parameter.

@@ -481,6 +481,10 @@ func main() {
 	)
 
 	r.Post("/auth/device", deviceLogin,
+		openapi.ExternalDocsLink(
+			"https://datatracker.ietf.org/doc/html/rfc8628",
+			"RFC 8628 — OAuth 2.0 Device Authorization Grant",
+		),
 		openapi.Summary("Begin a device authorization flow"),
 		openapi.Description(
 			"Demonstrates the OAS 3.2 deviceAuthorization OAuth2 flow as "+

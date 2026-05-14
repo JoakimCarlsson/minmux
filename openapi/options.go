@@ -18,6 +18,7 @@ type endpointMeta struct {
 	Description      string
 	OperationID      string
 	Deprecated       bool
+	ExternalDocs     *ExternalDocs
 	Tags             []string
 	Responses        []ResponseDecl
 	Security         []SecurityRequirement
@@ -140,6 +141,31 @@ func Description(s string) router.Option {
 // generated client API against incidental renames.
 func OperationID(id string) router.Option {
 	return func(ep *router.Endpoint) { writeMeta(ep).OperationID = id }
+}
+
+// ExternalDocsLink attaches an externalDocs link to this operation,
+// pointing readers at deeper documentation than fits in Description.
+// Passing an empty url removes any link previously set; description is
+// optional.
+//
+//	r.Get("/pets", listPets,
+//	    openapi.ExternalDocsLink(
+//	        "https://docs.example.com/pets",
+//	        "How pet ranking and filtering works",
+//	    ),
+//	)
+//
+// For document-level and per-tag externalDocs, set Generator.ExternalDocs
+// or Tag.ExternalDocs directly.
+func ExternalDocsLink(url, description string) router.Option {
+	return func(ep *router.Endpoint) {
+		m := writeMeta(ep)
+		if url == "" {
+			m.ExternalDocs = nil
+			return
+		}
+		m.ExternalDocs = &ExternalDocs{URL: url, Description: description}
+	}
 }
 
 // Deprecated marks the operation as deprecated. Renderers (Scalar, Swagger

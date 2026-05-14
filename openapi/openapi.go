@@ -175,13 +175,14 @@ func (b *schemaBuilder) buildOperation(ep *router.Endpoint) *Operation {
 		opID = deriveOperationID(ep.Method, ep.Path)
 	}
 	op := &Operation{
-		Tags:        m.Tags,
-		Summary:     m.Summary,
-		Description: m.Description,
-		OperationID: opID,
-		Deprecated:  m.Deprecated,
-		Responses:   b.buildResponses(m),
-		Security:    operationSecurity(m),
+		Tags:         m.Tags,
+		Summary:      m.Summary,
+		Description:  m.Description,
+		ExternalDocs: m.ExternalDocs,
+		OperationID:  opID,
+		Deprecated:   m.Deprecated,
+		Responses:    b.buildResponses(m),
+		Security:     operationSecurity(m),
 	}
 	if ep.ParamType != nil {
 		op.Parameters, op.RequestBody = b.buildParams(ep.ParamType)

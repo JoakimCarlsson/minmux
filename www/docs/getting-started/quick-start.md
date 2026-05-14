@@ -106,6 +106,36 @@ Renderers like Scalar and Swagger UI style deprecated parameters and
 operations distinctly (strikethrough, banner) so consumers see them at a
 glance.
 
+## External docs links
+
+OpenAPI lets you attach a "see also" link at three scopes; minmux
+supports all three:
+
+```go
+// Per operation
+r.Post("/auth/device", deviceLogin,
+    openapi.ExternalDocsLink(
+        "https://datatracker.ietf.org/doc/html/rfc8628",
+        "RFC 8628 — OAuth 2.0 Device Authorization Grant",
+    ),
+)
+
+// Per tag (see Structured tags below)
+gen.Tags = []*openapi.Tag{
+    {Name: "Streams", ExternalDocs: &openapi.ExternalDocs{
+        URL: "https://example.com/docs/streaming",
+    }},
+}
+
+// Document-wide
+gen.ExternalDocs = &openapi.ExternalDocs{
+    URL: "https://github.com/example/api",
+}
+```
+
+Pass an empty URL to `ExternalDocsLink` to clear a previously-set link
+— useful when composing options through helpers.
+
 ## Document metadata
 
 The `Info` block carries the API's public identity. Beyond `Title` /
