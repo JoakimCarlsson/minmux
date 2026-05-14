@@ -20,8 +20,10 @@ type Info struct {
 	Description string `json:"description,omitempty"`
 }
 
-// Generator builds OpenAPI 3.1 specs from a router by reflecting on the
-// registered endpoints' parameter and result types.
+// Generator builds OpenAPI 3.1 specs from a router by reading the openapi
+// options attached to each endpoint. Responses are taken purely from
+// explicit Returns[T] declarations; the handler signature provides no
+// implicit success response.
 type Generator struct {
 	Info Info
 }
@@ -97,11 +99,12 @@ func newSchemaBuilder() *schemaBuilder {
 }
 
 func (b *schemaBuilder) buildOperation(ep *router.Endpoint) *Operation {
+	m := readMeta(ep)
 	op := &Operation{
-		Tags:        ep.GetTags(),
-		Summary:     ep.GetSummary(),
-		Description: ep.GetDescription(),
-		Responses:   b.buildResponses(ep),
+		Tags:        m.Tags,
+		Summary:     m.Summary,
+		Description: m.Description,
+		Responses:   b.buildResponses(m),
 	}
 	if ep.ParamType != nil {
 		op.Parameters, op.RequestBody = b.buildParams(ep.ParamType)
@@ -154,43 +157,37 @@ func (b *schemaBuilder) buildParams(
 	return params, body
 }
 
-func (b *schemaBuilder) buildResponses(
-	ep *router.Endpoint,
-) map[string]*Response {
-	schema, status := b.resultSchema(ep.ResultType)
-	resp := &Response{Description: http.StatusText(status)}
-	if schema != nil {
-		resp.Content = map[string]*MediaType{
-			"application/json": {Schema: schema},
+// buildResponses turns the explicit Returns[T] declarations into the
+// responses block. Endpoints with no declared responses get a "default"
+// placeholder so the document remains a valid OpenAPI spec.
+func (b *schemaBuilder) buildResponses(m *endpointMeta) map[string]*Response {
+	if len(m.Responses) == 0 {
+		return map[string]*Response{
+			"default": {Description: "Default response"},
 		}
 	}
-	return map[string]*Response{strconv.Itoa(status): resp}
+	out := map[string]*Response{}
+	for _, decl := range m.Responses {
+		desc := decl.Description
+		if desc == "" {
+			desc = http.StatusText(decl.Status)
+		}
+		out[strconv.Itoa(decl.Status)] = b.responseFromType(decl.BodyType, desc)
+	}
+	return out
 }
 
-// resultSchema unwraps minmux result wrappers (Ok[T], Created[T], NoContent,
-// Redirect) to their inner schema and matching HTTP status.
-func (b *schemaBuilder) resultSchema(t reflect.Type) (*Schema, int) {
-	if t == nil {
-		return nil, http.StatusOK
-	}
-	name := t.Name()
-	switch {
-	case name == "NoContent":
-		return nil, http.StatusNoContent
-	case strings.HasPrefix(name, "Ok["):
-		if t.NumField() > 0 {
-			return b.schema(t.Field(0).Type), http.StatusOK
+func (b *schemaBuilder) responseFromType(
+	t reflect.Type,
+	desc string,
+) *Response {
+	r := &Response{Description: desc}
+	if t != nil {
+		r.Content = map[string]*MediaType{
+			"application/json": {Schema: b.schema(t)},
 		}
-		return nil, http.StatusOK
-	case strings.HasPrefix(name, "Created["):
-		if t.NumField() > 0 {
-			return b.schema(t.Field(0).Type), http.StatusCreated
-		}
-		return nil, http.StatusCreated
-	case name == "Redirect":
-		return nil, http.StatusSeeOther
 	}
-	return b.schema(t), http.StatusOK
+	return r
 }
 
 // schema returns the JSON Schema for t. Named user struct types are hoisted
@@ -202,8 +199,7 @@ func (b *schemaBuilder) schema(t reflect.Type) *Schema {
 	if t == timeType {
 		return &Schema{Type: "string", Format: "date-time"}
 	}
-	if t.Kind() == reflect.Struct && t.Name() != "" &&
-		!isInternalResultType(t) {
+	if t.Kind() == reflect.Struct && t.Name() != "" {
 		name := t.Name()
 		if _, exists := b.components[name]; !exists {
 			b.components[name] = &Schema{} // placeholder for recursive types
@@ -214,7 +210,6 @@ func (b *schemaBuilder) schema(t reflect.Type) *Schema {
 	return b.inline(t)
 }
 
-// inline returns the inline schema for t without hoisting.
 func (b *schemaBuilder) inline(t reflect.Type) *Schema {
 	switch t.Kind() {
 	case reflect.String:
@@ -258,14 +253,4 @@ func (b *schemaBuilder) structSchema(t reflect.Type) *Schema {
 		props[name] = b.schema(f.Type)
 	}
 	return &Schema{Type: "object", Properties: props}
-}
-
-// isInternalResultType reports whether t is one of minmux's response wrappers,
-// which should never be hoisted into components.
-func isInternalResultType(t reflect.Type) bool {
-	n := t.Name()
-	return strings.HasPrefix(n, "Ok[") ||
-		strings.HasPrefix(n, "Created[") ||
-		n == "NoContent" ||
-		n == "Redirect"
 }

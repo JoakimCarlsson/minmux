@@ -1,7 +1,6 @@
 package router
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -9,18 +8,15 @@ import (
 )
 
 type handlerInfo struct {
-	paramType  reflect.Type
-	resultType reflect.Type
+	paramType reflect.Type
 }
 
-var (
-	contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
-	errorType   = reflect.TypeOf((*error)(nil)).Elem()
-)
+var contextPtrType = reflect.TypeOf((*Context)(nil))
 
 // buildDispatcher reflects on the handler function once at registration and
-// returns a cached closure that performs request binding, handler invocation,
-// and response writing for every subsequent request.
+// returns a cached closure that performs request binding and handler
+// invocation for every subsequent request. Handlers write the response
+// directly via *Context; they have no return value.
 func buildDispatcher(
 	handler any,
 	codec Codec,
@@ -39,27 +35,22 @@ func buildDispatcher(
 
 	if ht.NumIn() < 1 || ht.NumIn() > 2 {
 		return nil, nil, fmt.Errorf(
-			"handler must take (ctx) or (ctx, params), got %d args", ht.NumIn(),
+			"handler must take (c *Context) or (c *Context, p Params), got %d args",
+			ht.NumIn(),
 		)
 	}
-	if ht.In(0) != contextType {
+	if ht.In(0) != contextPtrType {
 		return nil, nil, fmt.Errorf(
-			"handler first arg must be context.Context, got %s", ht.In(0),
+			"handler first arg must be *router.Context, got %s", ht.In(0),
 		)
 	}
-	if ht.NumOut() != 2 {
+	if ht.NumOut() != 0 {
 		return nil, nil, fmt.Errorf(
-			"handler must return (T, error), got %d return values", ht.NumOut(),
-		)
-	}
-	if ht.Out(1) != errorType {
-		return nil, nil, fmt.Errorf(
-			"handler second return must be `error`, got %s", ht.Out(1),
+			"handler must not return any values, got %d", ht.NumOut(),
 		)
 	}
 
-	info := &handlerInfo{resultType: ht.Out(0)}
-
+	info := &handlerInfo{}
 	var binder paramsBinder
 	if ht.NumIn() == 2 {
 		info.paramType = ht.In(1)
@@ -76,62 +67,35 @@ func buildDispatcher(
 	}
 
 	dispatch := func(w http.ResponseWriter, r *http.Request) {
-		args := []reflect.Value{reflect.ValueOf(r.Context())}
+		c := &Context{Writer: w, Request: r, codec: codec}
+		args := []reflect.Value{reflect.ValueOf(c)}
 		if binder != nil {
 			pv, err := binder(r)
 			if err != nil {
-				writeError(w, codec, err)
+				writeBindError(c, err)
 				return
 			}
 			args = append(args, pv)
 		}
-
-		out := hv.Call(args)
-		if !out[1].IsNil() {
-			writeError(w, codec, out[1].Interface().(error))
-			return
-		}
-		writeResult(w, codec, out[0])
+		hv.Call(args)
 	}
 
 	return dispatch, info, nil
 }
 
-func writeResult(w http.ResponseWriter, c Codec, result reflect.Value) {
-	iface := result.Interface()
-	if resp, ok := iface.(Response); ok {
-		_ = resp.WriteResponse(w, c)
-		return
-	}
-	w.Header().Set("Content-Type", c.ContentType())
-	w.WriteHeader(http.StatusOK)
-	_ = c.Encode(w, iface)
-}
-
-func writeError(w http.ResponseWriter, c Codec, err error) {
+// writeBindError writes a ProblemDetails for an input-binding failure. The
+// binder returns *ProblemDetails directly for path/query/header parse
+// errors and bad JSON bodies; this is just the dispatch-time writer.
+func writeBindError(c *Context, err error) {
 	var pd *ProblemDetails
-	if errors.As(err, &pd) {
-		writeProblem(w, c, pd)
-		return
-	}
-	var se StatusError
-	if errors.As(err, &se) {
-		writeProblem(w, c, &ProblemDetails{
-			Status: se.HTTPStatus(),
-			Title:  http.StatusText(se.HTTPStatus()),
+	if !errors.As(err, &pd) {
+		pd = &ProblemDetails{
+			Status: http.StatusBadRequest,
+			Title:  http.StatusText(http.StatusBadRequest),
 			Detail: err.Error(),
-		})
-		return
+		}
 	}
-	writeProblem(w, c, &ProblemDetails{
-		Status: http.StatusInternalServerError,
-		Title:  http.StatusText(http.StatusInternalServerError),
-		Detail: err.Error(),
-	})
-}
-
-func writeProblem(w http.ResponseWriter, c Codec, pd *ProblemDetails) {
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(pd.Status)
-	_ = c.Encode(w, pd)
+	c.Writer.Header().Set("Content-Type", "application/problem+json")
+	c.Writer.WriteHeader(pd.Status)
+	_ = c.codec.Encode(c.Writer, pd)
 }

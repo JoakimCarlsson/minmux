@@ -1,7 +1,7 @@
 package main
 
 import (
-	"context"
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -50,6 +50,8 @@ type DeleteTodoParams struct {
 	ID int `path:"id"`
 }
 
+var ErrTodoNotFound = errors.New("todo not found")
+
 // Store is a tiny in-memory todo repository.
 type Store struct {
 	mu    sync.Mutex
@@ -67,7 +69,7 @@ func (s *Store) Get(id int) (Todo, error) {
 	defer s.mu.Unlock()
 	t, ok := s.todos[id]
 	if !ok {
-		return Todo{}, router.NotFound("todo not found")
+		return Todo{}, ErrTodoNotFound
 	}
 	return t, nil
 }
@@ -106,7 +108,7 @@ func (s *Store) Update(id int, cmd UpdateTodoCommand) (Todo, error) {
 	defer s.mu.Unlock()
 	t, ok := s.todos[id]
 	if !ok {
-		return Todo{}, router.NotFound("todo not found")
+		return Todo{}, ErrTodoNotFound
 	}
 	if cmd.Title != nil {
 		t.Title = *cmd.Title
@@ -122,7 +124,7 @@ func (s *Store) Delete(id int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.todos[id]; !ok {
-		return router.NotFound("todo not found")
+		return ErrTodoNotFound
 	}
 	delete(s.todos, id)
 	return nil
@@ -134,55 +136,104 @@ type API struct {
 }
 
 func (a *API) Register(r *router.Router) {
-	todos := r.Group("/api/v1/todos").Tags("Todos")
+	todos := r.Group("/api/v1/todos", openapi.Tags("Todos"))
 
-	todos.Get("", a.List).
-		Summary("List todos").
-		Description("Return all todos. Filter by ?completed=true|false, bound by ?limit=N.")
+	todos.Get(
+		"",
+		a.List,
+		openapi.Summary("List todos"),
+		openapi.Description(
+			"Return all todos. Filter by ?completed=true|false, bound by ?limit=N.",
+		),
+		openapi.Returns[[]Todo](http.StatusOK, "Todo list"),
+	)
 
-	todos.Get("/{id}", a.Get).
-		Summary("Get a todo").
-		Description("Returns 404 if the todo does not exist.")
+	todos.Get(
+		"/{id}",
+		a.Get,
+		openapi.Summary("Get a todo"),
+		openapi.Returns[Todo](http.StatusOK, "Todo found"),
+		openapi.Returns[router.ProblemDetails](
+			http.StatusNotFound,
+			"Todo not found",
+		),
+	)
 
-	todos.Post("", a.Create).
-		Summary("Create a todo")
+	todos.Post(
+		"",
+		a.Create,
+		openapi.Summary("Create a todo"),
+		openapi.Returns[Todo](http.StatusCreated, "Todo created"),
+		openapi.Returns[router.ProblemDetails](
+			http.StatusBadRequest,
+			"Invalid body",
+		),
+	)
 
-	todos.Patch("/{id}", a.Update).
-		Summary("Update a todo").
-		Description("Partial update. Pass only the fields you want to change.")
+	todos.Patch(
+		"/{id}",
+		a.Update,
+		openapi.Summary("Update a todo"),
+		openapi.Description(
+			"Partial update. Pass only the fields you want to change.",
+		),
+		openapi.Returns[Todo](http.StatusOK, "Todo updated"),
+		openapi.Returns[router.ProblemDetails](
+			http.StatusNotFound,
+			"Todo not found",
+		),
+		openapi.Returns[router.ProblemDetails](
+			http.StatusBadRequest,
+			"Invalid body",
+		),
+	)
 
-	todos.Delete("/{id}", a.Delete).
-		Summary("Delete a todo")
+	todos.Delete(
+		"/{id}",
+		a.Delete,
+		openapi.Summary("Delete a todo"),
+		openapi.Returns[any](http.StatusNoContent, "Todo deleted"),
+		openapi.Returns[router.ProblemDetails](
+			http.StatusNotFound,
+			"Todo not found",
+		),
+	)
 }
 
-func (a *API) List(_ context.Context, p ListTodosParams) ([]Todo, error) {
-	return a.store.List(p.Completed, p.Limit), nil
+func (a *API) List(c *router.Context, p ListTodosParams) {
+	c.JSON(http.StatusOK, a.store.List(p.Completed, p.Limit))
 }
 
-func (a *API) Get(_ context.Context, p GetTodoParams) (Todo, error) {
-	return a.store.Get(p.ID)
+func (a *API) Get(c *router.Context, p GetTodoParams) {
+	t, err := a.store.Get(p.ID)
+	if errors.Is(err, ErrTodoNotFound) {
+		c.JSON(http.StatusNotFound, router.NotFound("todo not found"))
+		return
+	}
+	c.JSON(http.StatusOK, t)
 }
 
-func (a *API) Create(
-	_ context.Context,
-	p CreateTodoParams,
-) (router.Created[Todo], error) {
+func (a *API) Create(c *router.Context, p CreateTodoParams) {
 	t := a.store.Create(p.Body)
-	return router.Created[Todo]{
-		Value:    t,
-		Location: "/api/v1/todos/" + strconv.Itoa(t.ID),
-	}, nil
+	c.Header("Location", "/api/v1/todos/"+strconv.Itoa(t.ID))
+	c.JSON(http.StatusCreated, t)
 }
 
-func (a *API) Update(_ context.Context, p UpdateTodoParams) (Todo, error) {
-	return a.store.Update(p.ID, p.Body)
+func (a *API) Update(c *router.Context, p UpdateTodoParams) {
+	t, err := a.store.Update(p.ID, p.Body)
+	if errors.Is(err, ErrTodoNotFound) {
+		c.JSON(http.StatusNotFound, router.NotFound("todo not found"))
+		return
+	}
+	c.JSON(http.StatusOK, t)
 }
 
-func (a *API) Delete(
-	_ context.Context,
-	p DeleteTodoParams,
-) (router.NoContent, error) {
-	return router.NoContent{}, a.store.Delete(p.ID)
+func (a *API) Delete(c *router.Context, p DeleteTodoParams) {
+	if err := a.store.Delete(p.ID); errors.Is(err, ErrTodoNotFound) {
+		c.JSON(http.StatusNotFound, router.NotFound("todo not found"))
+		return
+	}
+	c.NoContent()
 }
 
 func main() {

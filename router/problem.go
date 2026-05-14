@@ -2,9 +2,9 @@ package router
 
 import "net/http"
 
-// ProblemDetails is an RFC 7807 error response. It is the canonical 4xx/5xx
-// payload shape, an error in its own right, and carries the HTTP status
-// the framework uses when it is returned from a handler.
+// ProblemDetails is an RFC 7807 error response shape. It implements the
+// error interface so it can be returned from service-layer code and
+// written directly via c.JSON(pd.Status, pd).
 type ProblemDetails struct {
 	Type     string `json:"type,omitempty"`
 	Title    string `json:"title,omitempty"`
@@ -19,17 +19,6 @@ func (p *ProblemDetails) Error() string {
 		return p.Title + ": " + p.Detail
 	}
 	return p.Title
-}
-
-// HTTPStatus implements StatusError.
-func (p *ProblemDetails) HTTPStatus() int { return p.Status }
-
-// StatusError is implemented by errors that map to a specific HTTP status.
-// Errors returned from handlers that satisfy this interface produce the
-// indicated status code; bare errors produce 500.
-type StatusError interface {
-	error
-	HTTPStatus() int
 }
 
 // NotFound builds a 404 ProblemDetails.

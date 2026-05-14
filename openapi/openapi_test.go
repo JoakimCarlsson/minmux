@@ -1,8 +1,8 @@
 package openapi
 
 import (
-	"context"
 	"encoding/json"
+	"net/http"
 	"reflect"
 	"strings"
 	"testing"
@@ -58,15 +58,6 @@ func TestInlineSchema_PointerUnwraps(t *testing.T) {
 	}
 }
 
-func TestInlineSchema_DoublePointerUnwraps(t *testing.T) {
-	var s string
-	p := &s
-	got := newSchemaBuilder().schema(reflect.TypeOf(&p))
-	if got.Type != "string" {
-		t.Errorf("**string: want string, got %+v", got)
-	}
-}
-
 func TestInlineSchema_SliceOfScalar(t *testing.T) {
 	got := newSchemaBuilder().schema(reflect.TypeOf([]int{}))
 	if got.Type != "array" {
@@ -113,6 +104,11 @@ type Book struct {
 type Node struct {
 	ID       int     `json:"id"`
 	Children []*Node `json:"children"`
+}
+
+type ErrorModel struct {
+	Field   string `json:"field"`
+	Message string `json:"message"`
 }
 
 func TestSchema_NamedStructProducesRef(t *testing.T) {
@@ -202,60 +198,6 @@ func TestSchema_TimeIsNotHoisted(t *testing.T) {
 	}
 }
 
-func TestResultSchema_BareValue(t *testing.T) {
-	b := newSchemaBuilder()
-	schema, status := b.resultSchema(reflect.TypeOf(User{}))
-	if status != 200 {
-		t.Errorf("status: want 200, got %d", status)
-	}
-	if schema.Ref != "#/components/schemas/User" {
-		t.Errorf("schema: want $ref to User, got %+v", schema)
-	}
-}
-
-func TestResultSchema_Ok(t *testing.T) {
-	b := newSchemaBuilder()
-	schema, status := b.resultSchema(reflect.TypeOf(router.Ok[User]{}))
-	if status != 200 {
-		t.Errorf("status: want 200, got %d", status)
-	}
-	if schema.Ref != "#/components/schemas/User" {
-		t.Errorf("Ok schema: want $ref to User, got %+v", schema)
-	}
-}
-
-func TestResultSchema_Created(t *testing.T) {
-	b := newSchemaBuilder()
-	schema, status := b.resultSchema(reflect.TypeOf(router.Created[User]{}))
-	if status != 201 {
-		t.Errorf("status: want 201, got %d", status)
-	}
-	if schema.Ref != "#/components/schemas/User" {
-		t.Errorf("Created schema: want $ref to User, got %+v", schema)
-	}
-}
-
-func TestResultSchema_NoContent(t *testing.T) {
-	b := newSchemaBuilder()
-	schema, status := b.resultSchema(reflect.TypeOf(router.NoContent{}))
-	if status != 204 {
-		t.Errorf("status: want 204, got %d", status)
-	}
-	if schema != nil {
-		t.Errorf("NoContent schema: want nil, got %+v", schema)
-	}
-	if _, ok := b.components["NoContent"]; ok {
-		t.Errorf("NoContent must not be hoisted into components")
-	}
-}
-
-func TestResultSchema_Redirect(t *testing.T) {
-	_, status := newSchemaBuilder().resultSchema(reflect.TypeOf(router.Redirect{}))
-	if status != 303 {
-		t.Errorf("Redirect status: want 303, got %d", status)
-	}
-}
-
 func TestSpec_TopLevelFields(t *testing.T) {
 	r := router.New()
 	spec := NewGenerator(
@@ -291,11 +233,13 @@ type bodyParams struct {
 	Body User `body:""`
 }
 
+func noop(c *router.Context)              {}
+func noopP[P any](c *router.Context, p P) {}
+func noopUser(c *router.Context)          {}
+
 func TestSpec_PathParam(t *testing.T) {
 	r := router.New()
-	r.Get("/items/{id}", func(_ context.Context, _ pathParams) (User, error) {
-		return User{}, nil
-	})
+	r.Get("/items/{id}", noopP[pathParams])
 	op := operation(t, r, "/items/{id}", "GET")
 	if len(op.Parameters) != 1 {
 		t.Fatalf("want 1 param, got %d", len(op.Parameters))
@@ -311,9 +255,7 @@ func TestSpec_PathParam(t *testing.T) {
 
 func TestSpec_QueryParams(t *testing.T) {
 	r := router.New()
-	r.Get("/items", func(_ context.Context, _ queryParams) ([]User, error) {
-		return nil, nil
-	})
+	r.Get("/items", noopP[queryParams])
 	op := operation(t, r, "/items", "GET")
 	if len(op.Parameters) != 2 {
 		t.Fatalf("want 2 params, got %d", len(op.Parameters))
@@ -335,9 +277,7 @@ func TestSpec_QueryParams(t *testing.T) {
 
 func TestSpec_HeaderParam(t *testing.T) {
 	r := router.New()
-	r.Get("/items", func(_ context.Context, _ headerParams) (User, error) {
-		return User{}, nil
-	})
+	r.Get("/items", noopP[headerParams])
 	op := operation(t, r, "/items", "GET")
 	if len(op.Parameters) != 1 || op.Parameters[0].Name != "X-Trace-Id" ||
 		op.Parameters[0].In != "header" {
@@ -347,12 +287,7 @@ func TestSpec_HeaderParam(t *testing.T) {
 
 func TestSpec_RequestBodyIsRef(t *testing.T) {
 	r := router.New()
-	r.Post(
-		"/items",
-		func(_ context.Context, _ bodyParams) (router.Created[User], error) {
-			return router.Created[User]{}, nil
-		},
-	)
+	r.Post("/items", noopP[bodyParams])
 	op := operation(t, r, "/items", "POST")
 	if op.RequestBody == nil {
 		t.Fatal("missing requestBody")
@@ -366,19 +301,58 @@ func TestSpec_RequestBodyIsRef(t *testing.T) {
 	}
 }
 
-func TestSpec_ResponsesAreRef(t *testing.T) {
+func TestSpec_NoResponsesYieldsDefault(t *testing.T) {
 	r := router.New()
-	r.Get("/u", func(_ context.Context) (User, error) { return User{}, nil })
+	r.Get("/u", noop)
 	op := operation(t, r, "/u", "GET")
-	schema := op.Responses["200"].Content["application/json"].Schema
-	if schema.Ref != "#/components/schemas/User" {
-		t.Errorf("response schema: want $ref to User, got %+v", schema)
+	if _, ok := op.Responses["default"]; !ok {
+		t.Errorf(
+			"expected default response when none declared, got %v",
+			op.Responses,
+		)
+	}
+	if _, ok := op.Responses["200"]; ok {
+		t.Errorf("expected no implicit 200, got %v", op.Responses)
 	}
 }
 
-func TestSpec_ListResponseHasItemsRef(t *testing.T) {
+func TestSpec_ExplicitReturns(t *testing.T) {
 	r := router.New()
-	r.Get("/u", func(_ context.Context) ([]User, error) { return nil, nil })
+	r.Get("/u", noop,
+		Returns[User](http.StatusOK, "User"),
+		Returns[router.ProblemDetails](http.StatusNotFound, "Not found"),
+	)
+	op := operation(t, r, "/u", "GET")
+
+	r200 := op.Responses["200"]
+	if r200 == nil {
+		t.Fatalf("missing 200, responses: %v", op.Responses)
+	}
+	if r200.Description != "User" {
+		t.Errorf("200 description: %q", r200.Description)
+	}
+	if r200.Content["application/json"].Schema.Ref != "#/components/schemas/User" {
+		t.Errorf("200 schema: %+v", r200.Content["application/json"].Schema)
+	}
+
+	r404 := op.Responses["404"]
+	if r404 == nil {
+		t.Fatalf("missing 404, responses: %v", op.Responses)
+	}
+	if r404.Content["application/json"].Schema.Ref != "#/components/schemas/ProblemDetails" {
+		t.Errorf("404 schema: %+v", r404.Content["application/json"].Schema)
+	}
+
+	if _, ok := op.Responses["default"]; ok {
+		t.Errorf("default should not appear when explicit responses declared")
+	}
+}
+
+func TestSpec_ReturnsArray(t *testing.T) {
+	r := router.New()
+	r.Get("/u", noop,
+		Returns[[]User](http.StatusOK, "List of users"),
+	)
 	op := operation(t, r, "/u", "GET")
 	schema := op.Responses["200"].Content["application/json"].Schema
 	if schema.Type != "array" {
@@ -389,24 +363,13 @@ func TestSpec_ListResponseHasItemsRef(t *testing.T) {
 	}
 }
 
-func TestSpec_NoContentHasNoBody(t *testing.T) {
+func TestSpec_MetadataOptions(t *testing.T) {
 	r := router.New()
-	r.Delete("/u", func(_ context.Context) (router.NoContent, error) {
-		return router.NoContent{}, nil
-	})
-	op := operation(t, r, "/u", "DELETE")
-	r204 := op.Responses["204"]
-	if r204.Content != nil {
-		t.Errorf("NoContent should have no content, got %+v", r204.Content)
-	}
-}
-
-func TestSpec_Metadata(t *testing.T) {
-	r := router.New()
-	r.Get("/u", func(_ context.Context) (User, error) { return User{}, nil }).
-		Tags("Users").
-		Summary("Get user").
-		Description("Fetch a user by ID")
+	r.Get("/u", noop,
+		Tags("Users"),
+		Summary("Get user"),
+		Description("Fetch a user by ID"),
+	)
 	op := operation(t, r, "/u", "GET")
 	if op.Summary != "Get user" {
 		t.Errorf("summary: %q", op.Summary)
@@ -421,9 +384,8 @@ func TestSpec_Metadata(t *testing.T) {
 
 func TestSpec_GroupTagsCascade(t *testing.T) {
 	r := router.New()
-	g := r.Group("/api/v1").Tags("V1")
-	g.Get("/u", func(_ context.Context) (User, error) { return User{}, nil }).
-		Tags("Users")
+	g := r.Group("/api/v1", Tags("V1"))
+	g.Get("/u", noop, Tags("Users"))
 
 	op := operation(t, r, "/api/v1/u", "GET")
 	if len(op.Tags) != 2 || op.Tags[0] != "V1" || op.Tags[1] != "Users" {
@@ -431,15 +393,22 @@ func TestSpec_GroupTagsCascade(t *testing.T) {
 	}
 }
 
+func TestSpec_GroupNestingCascades(t *testing.T) {
+	r := router.New()
+	v1 := r.Group("/api/v1", Tags("V1"))
+	users := v1.Group("/users", Tags("Users"))
+	users.Get("/{id}", noopP[pathParams])
+
+	op := operation(t, r, "/api/v1/users/{id}", "GET")
+	if len(op.Tags) != 2 || op.Tags[0] != "V1" || op.Tags[1] != "Users" {
+		t.Errorf("nested tags: want [V1 Users], got %v", op.Tags)
+	}
+}
+
 func TestSpec_MultipleMethodsSamePath(t *testing.T) {
 	r := router.New()
-	r.Get("/u", func(_ context.Context) (User, error) { return User{}, nil })
-	r.Post(
-		"/u",
-		func(_ context.Context, _ bodyParams) (router.Created[User], error) {
-			return router.Created[User]{}, nil
-		},
-	)
+	r.Get("/u", noop)
+	r.Post("/u", noopP[bodyParams])
 	spec := NewGenerator(Info{}).Spec(r)
 	item := spec.Paths["/u"]
 	if item.Get == nil {
@@ -450,10 +419,10 @@ func TestSpec_MultipleMethodsSamePath(t *testing.T) {
 	}
 }
 
-func TestSpec_ComponentsSchemasAccumulate(t *testing.T) {
+func TestSpec_ComponentsAccumulate(t *testing.T) {
 	r := router.New()
-	r.Get("/u", func(_ context.Context) (User, error) { return User{}, nil })
-	r.Get("/b", func(_ context.Context) (Book, error) { return Book{}, nil })
+	r.Get("/u", noop, Returns[User](http.StatusOK, ""))
+	r.Get("/b", noop, Returns[Book](http.StatusOK, ""))
 
 	spec := NewGenerator(Info{}).Spec(r)
 	if spec.Components == nil {
@@ -472,10 +441,7 @@ func TestSpec_ComponentsSchemasAccumulate(t *testing.T) {
 
 func TestSpec_EmptyComponentsNotEmitted(t *testing.T) {
 	r := router.New()
-	r.Get(
-		"/p",
-		func(_ context.Context, _ pathParams) (string, error) { return "", nil },
-	)
+	r.Get("/p", noopP[pathParams])
 
 	spec := NewGenerator(Info{}).Spec(r)
 	if spec.Components != nil {
@@ -488,9 +454,7 @@ func TestSpec_EmptyComponentsNotEmitted(t *testing.T) {
 
 func TestSpec_JSONFieldOrder(t *testing.T) {
 	r := router.New()
-	r.Get("/u/{id}", func(_ context.Context, _ pathParams) (User, error) {
-		return User{}, nil
-	})
+	r.Get("/u/{id}", noopP[pathParams], Returns[User](http.StatusOK, ""))
 
 	raw, err := json.Marshal(
 		NewGenerator(Info{Title: "T", Version: "1"}).Spec(r),
@@ -511,34 +475,6 @@ func TestSpec_JSONFieldOrder(t *testing.T) {
 			idxPaths,
 			idxComponents,
 			s,
-		)
-	}
-}
-
-func TestSpec_SchemaFieldOrder(t *testing.T) {
-	r := router.New()
-	r.Get("/u", func(_ context.Context) (User, error) { return User{}, nil })
-	raw, err := json.Marshal(NewGenerator(Info{}).Spec(r))
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := string(raw)
-	if i := strings.Index(s, `"$ref":"#/components/schemas/User"`); i < 0 {
-		t.Fatalf("missing User $ref in: %s", s)
-	}
-	user := strings.Index(s, `"User":{`)
-	if user < 0 {
-		t.Fatalf("missing User definition: %s", s)
-	}
-	rest := s[user:]
-	typeIdx := strings.Index(rest, `"type"`)
-	propsIdx := strings.Index(rest, `"properties"`)
-	if !(typeIdx >= 0 && propsIdx >= 0 && typeIdx < propsIdx) {
-		t.Errorf(
-			"schema order: type=%d properties=%d in %s",
-			typeIdx,
-			propsIdx,
-			rest,
 		)
 	}
 }

@@ -14,16 +14,16 @@ type Router struct {
 	codec      Codec
 }
 
-// Option configures a Router at construction time.
-type Option func(*Router)
+// RouterOption configures a Router at construction time.
+type RouterOption func(*Router)
 
 // WithCodec replaces the default JSON codec.
-func WithCodec(c Codec) Option {
+func WithCodec(c Codec) RouterOption {
 	return func(r *Router) { r.codec = c }
 }
 
 // New constructs a Router.
-func New(opts ...Option) *Router {
+func New(opts ...RouterOption) *Router {
 	r := &Router{
 		mux:   http.NewServeMux(),
 		codec: jsonCodec{},
@@ -49,40 +49,41 @@ func (r *Router) Use(mw ...func(http.Handler) http.Handler) {
 }
 
 // Endpoints returns every typed endpoint registered on this router. Used by
-// openapi spec generation. Raw handlers registered via HandleFunc / Handle
-// are not included.
+// annotation consumers (e.g. openapi). Raw handlers registered via HandleFunc
+// or Handle are not included.
 func (r *Router) Endpoints() []*Endpoint {
 	return r.endpoints
 }
 
-// Get registers a typed GET handler.
-func (r *Router) Get(path string, handler any) *Endpoint {
-	return r.register(http.MethodGet, path, handler, nil)
+// Get registers a typed GET handler with optional annotations.
+func (r *Router) Get(path string, handler any, opts ...Option) *Endpoint {
+	return r.register(http.MethodGet, path, handler, nil, opts)
 }
 
-// Post registers a typed POST handler.
-func (r *Router) Post(path string, handler any) *Endpoint {
-	return r.register(http.MethodPost, path, handler, nil)
+// Post registers a typed POST handler with optional annotations.
+func (r *Router) Post(path string, handler any, opts ...Option) *Endpoint {
+	return r.register(http.MethodPost, path, handler, nil, opts)
 }
 
-// Put registers a typed PUT handler.
-func (r *Router) Put(path string, handler any) *Endpoint {
-	return r.register(http.MethodPut, path, handler, nil)
+// Put registers a typed PUT handler with optional annotations.
+func (r *Router) Put(path string, handler any, opts ...Option) *Endpoint {
+	return r.register(http.MethodPut, path, handler, nil, opts)
 }
 
-// Patch registers a typed PATCH handler.
-func (r *Router) Patch(path string, handler any) *Endpoint {
-	return r.register(http.MethodPatch, path, handler, nil)
+// Patch registers a typed PATCH handler with optional annotations.
+func (r *Router) Patch(path string, handler any, opts ...Option) *Endpoint {
+	return r.register(http.MethodPatch, path, handler, nil, opts)
 }
 
-// Delete registers a typed DELETE handler.
-func (r *Router) Delete(path string, handler any) *Endpoint {
-	return r.register(http.MethodDelete, path, handler, nil)
+// Delete registers a typed DELETE handler with optional annotations.
+func (r *Router) Delete(path string, handler any, opts ...Option) *Endpoint {
+	return r.register(http.MethodDelete, path, handler, nil, opts)
 }
 
-// Group creates a route group with a shared prefix and cascading metadata.
-func (r *Router) Group(prefix string) *Group {
-	return &Group{router: r, prefix: prefix}
+// Group creates a route group with a shared prefix. Options passed here
+// apply to every endpoint registered through the group.
+func (r *Router) Group(prefix string, opts ...Option) *Group {
+	return &Group{router: r, prefix: prefix, opts: opts}
 }
 
 // HandleFunc registers a raw http.HandlerFunc for the given method and path,
@@ -101,6 +102,7 @@ func (r *Router) register(
 	method, path string,
 	handler any,
 	g *Group,
+	opts []Option,
 ) *Endpoint {
 	full := joinPath(groupPrefix(g), path)
 	dispatch, info, err := buildDispatcher(handler, r.codec)
@@ -108,11 +110,18 @@ func (r *Router) register(
 		panic(fmt.Sprintf("minmux: %s %s: %v", method, full, err))
 	}
 	ep := &Endpoint{
-		Method:     method,
-		Path:       full,
-		ParamType:  info.paramType,
-		ResultType: info.resultType,
-		tags:       append([]string(nil), groupTags(g)...),
+		Method:    method,
+		Path:      full,
+		ParamType: info.paramType,
+		Metadata:  map[any]any{},
+	}
+	if g != nil {
+		for _, opt := range g.opts {
+			opt(ep)
+		}
+	}
+	for _, opt := range opts {
+		opt(ep)
 	}
 	r.endpoints = append(r.endpoints, ep)
 	r.mux.HandleFunc(method+" "+full, dispatch)
