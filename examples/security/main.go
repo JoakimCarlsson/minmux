@@ -6,11 +6,9 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/joakimcarlsson/minmux/openapi"
 	"github.com/joakimcarlsson/minmux/router"
@@ -174,19 +172,6 @@ func main() {
 	)
 
 	r.HandleFunc(http.MethodGet, "/openapi.json", gen.Handler(r))
-
-	// --check prints the generated spec to stdout and exits. Useful for
-	// CI smoke checks without leaving a server running.
-	for _, a := range os.Args[1:] {
-		if a == "--check" {
-			raw, err := json.MarshalIndent(gen.Spec(r), "", "  ")
-			if err != nil {
-				log.Fatal(err)
-			}
-			fmt.Println(string(raw))
-			return
-		}
-	}
 
 	addr := ":8080"
 	fmt.Println("listening on", addr)

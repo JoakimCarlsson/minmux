@@ -16,7 +16,8 @@ You install only the modules you use.
 
 | Module | Purpose |
 |---|---|
-| `openapi` | OpenAPI 3.2 spec generation from explicit endpoint annotations, with auto-mapped numeric formats (int32/int64/float/double), a `format:"..."` struct tag for string formats (email, password, uuid, ...), streaming options (`StreamsBody[T]`, `SSEStream[T]`, `MultipartMixedStream[T]`) that emit `itemSchema` / `itemEncoding` / `prefixEncoding`, and the full OAS 3.2 security model (`apiKey`, `http`, `mutualTLS`, `oauth2` incl. `deviceAuthorization`, `openIdConnect`) with declarative document-level and per-endpoint requirements. Depends on `router`. |
+| `openapi` | OpenAPI 3.2 spec generation from explicit endpoint annotations, with auto-mapped numeric formats (int32/int64/float/double), a `format:"..."` struct tag for string formats (email, password, uuid, ...), streaming options (`StreamsBody[T]`, `SSEStream[T]`, `MultipartMixedStream[T]`) that emit `itemSchema` / `itemEncoding` / `prefixEncoding`, the full OAS 3.2 security model (`apiKey`, `http`, `mutualTLS`, `oauth2` incl. `deviceAuthorization`, `openIdConnect`) with declarative document-level and per-endpoint requirements, and document-level `servers` (with templated URL variables) for base-URL selection. Depends on `router`. |
+| `scalar` | Serves the [Scalar API Reference](https://scalar.com) UI as an `http.HandlerFunc` pointed at an OpenAPI document URL — typically the same-origin path served by `openapi.Generator.Handler`. Renders OAS 3.x including the 3.2 fields minmux emits. Zero external dependencies. See [Scalar UI](scalar-ui.md). |
 
 ## Middleware
 

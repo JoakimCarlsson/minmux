@@ -1,15 +1,33 @@
 package openapi
 
 // Document is the root OpenAPI document. Field order in JSON output follows
-// the conventional OpenAPI 3.2 layout: openapi, info, dialect, paths,
-// components, security.
+// the conventional OpenAPI 3.2 layout: openapi, info, dialect, servers,
+// paths, components, security.
 type Document struct {
 	OpenAPI           string                `json:"openapi"`
 	Info              Info                  `json:"info"`
 	JSONSchemaDialect string                `json:"jsonSchemaDialect,omitempty"`
+	Servers           []*Server             `json:"servers,omitempty"`
 	Paths             map[string]*PathItem  `json:"paths"`
 	Components        *Components           `json:"components,omitempty"`
 	Security          []SecurityRequirement `json:"security,omitempty"`
+}
+
+// Server is one entry in the document-level servers array (OAS 3.2 §4.7).
+// URL may contain {variable} placeholders; each must have a matching entry
+// in Variables. Set Variables to nil for fully literal URLs.
+type Server struct {
+	URL         string                     `json:"url"`
+	Description string                     `json:"description,omitempty"`
+	Variables   map[string]*ServerVariable `json:"variables,omitempty"`
+}
+
+// ServerVariable describes a single {variable} placeholder in a Server URL.
+// Default is required; Enum constrains the allowed values when non-empty.
+type ServerVariable struct {
+	Default     string   `json:"default"`
+	Enum        []string `json:"enum,omitempty"`
+	Description string   `json:"description,omitempty"`
 }
 
 // PathItem is a single path entry, carrying one operation per HTTP method.

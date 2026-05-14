@@ -831,3 +831,75 @@ func operation(t *testing.T, r *router.Router, path, method string) *Operation {
 	}
 	return op
 }
+
+func TestSpec_Servers(t *testing.T) {
+	r := router.New()
+	r.Get("/health", noop)
+
+	g := NewGenerator(Info{Title: "T", Version: "0"})
+	g.Servers = []*Server{
+		{URL: "https://api.example.com/v1", Description: "Production"},
+		{
+			URL:         "https://{environment}.example.com/v1",
+			Description: "Non-production",
+			Variables: map[string]*ServerVariable{
+				"environment": {
+					Default:     "staging",
+					Enum:        []string{"staging", "dev"},
+					Description: "Deployment tier",
+				},
+			},
+		},
+	}
+
+	doc := g.Spec(r)
+	if len(doc.Servers) != 2 {
+		t.Fatalf("servers: want 2, got %d", len(doc.Servers))
+	}
+	if doc.Servers[0].URL != "https://api.example.com/v1" {
+		t.Errorf("server[0] url: %q", doc.Servers[0].URL)
+	}
+
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(raw)
+	for _, want := range []string{
+		`"servers":[`,
+		`"url":"https://api.example.com/v1"`,
+		`"description":"Production"`,
+		`"variables":{"environment":`,
+		`"default":"staging"`,
+		`"enum":["staging","dev"]`,
+	} {
+		if !strings.Contains(js, want) {
+			t.Errorf("spec missing %q in:\n%s", want, js)
+		}
+	}
+
+	// Field order: servers must appear between jsonSchemaDialect and paths.
+	dialect := strings.Index(js, `"jsonSchemaDialect"`)
+	servers := strings.Index(js, `"servers"`)
+	pathsIdx := strings.Index(js, `"paths"`)
+	if !(dialect < servers && servers < pathsIdx) {
+		t.Errorf(
+			"field order: jsonSchemaDialect=%d servers=%d paths=%d",
+			dialect, servers, pathsIdx,
+		)
+	}
+}
+
+func TestSpec_OmitsServersWhenEmpty(t *testing.T) {
+	r := router.New()
+	r.Get("/health", noop)
+
+	doc := NewGenerator(Info{Title: "T", Version: "0"}).Spec(r)
+	if doc.Servers != nil {
+		t.Errorf("Servers should be nil when unset, got %+v", doc.Servers)
+	}
+	raw, _ := json.Marshal(doc)
+	if strings.Contains(string(raw), `"servers"`) {
+		t.Errorf("JSON should omit empty servers; got:\n%s", raw)
+	}
+}

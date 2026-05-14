@@ -39,8 +39,13 @@ type Info struct {
 // components.securitySchemes. Security sets the document-level default
 // Security Requirement list; individual operations may override it via
 // the Security / NoSecurity / OptionalSecurity options.
+//
+// Servers populates the document-level servers array. Renderers like
+// Scalar and Swagger UI use this to offer a base-URL selector and to
+// pre-fill the host portion of "Try it out" requests.
 type Generator struct {
 	Info            Info
+	Servers         []*Server
 	SecuritySchemes map[string]*SecurityScheme
 	Security        []SecurityRequirement
 }
@@ -67,6 +72,7 @@ func (g *Generator) Spec(r *router.Router) *Document {
 		OpenAPI:           "3.2.0",
 		Info:              g.Info,
 		JSONSchemaDialect: "https://spec.openapis.org/oas/3.1/dialect/base",
+		Servers:           g.Servers,
 		Paths:             paths,
 		Security:          g.Security,
 	}

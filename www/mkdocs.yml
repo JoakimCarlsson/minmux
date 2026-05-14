@@ -46,5 +46,6 @@ nav:
     - Quick Start: getting-started/quick-start.md
   - Streaming: streaming.md
   - Security: security.md
+  - Scalar UI: scalar-ui.md
   - Caching:
     - Output Cache: caching/outputcache.md

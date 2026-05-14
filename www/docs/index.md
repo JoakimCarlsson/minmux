@@ -35,6 +35,11 @@ compatible. Ships as independent modules — pull only what you need.
   `openapi.Security`, `openapi.SecurityAll`,
   `openapi.OptionalSecurity`, and `openapi.NoSecurity`. See
   [Security](security.md).
+- **Browsable reference UI.** The optional `scalar` module serves the
+  [Scalar API Reference](https://scalar.com) as an `http.HandlerFunc`
+  pointing at the spec URL — drop it next to `/openapi.json` and you
+  get an interactive 3.2-aware reference at `/docs`. See
+  [Scalar UI](scalar-ui.md).
 - **Multi-module.** `router` is the runtime, `openapi` is the spec
   generator. Independent versioning; the router has zero dependencies on
   the openapi package.
