@@ -20,7 +20,7 @@ type Info struct {
 	Description string `json:"description,omitempty"`
 }
 
-// Generator builds OpenAPI 3.1 specs from a router by reading the openapi
+// Generator builds OpenAPI 3.2 specs from a router by reading the openapi
 // options attached to each endpoint. Responses are taken purely from
 // explicit Returns[T] declarations; the handler signature provides no
 // implicit success response.
@@ -47,7 +47,7 @@ func (g *Generator) Spec(r *router.Router) *Document {
 		setOperation(item, ep.Method, op)
 	}
 	doc := &Document{
-		OpenAPI:           "3.1.0",
+		OpenAPI:           "3.2.0",
 		Info:              g.Info,
 		JSONSchemaDialect: "https://spec.openapis.org/oas/3.1/dialect/base",
 		Paths:             paths,

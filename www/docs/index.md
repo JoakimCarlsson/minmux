@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go Version](https://img.shields.io/badge/go-1.25%2B-00ADD8?logo=go)](https://go.dev/)
 
-An HTTP framework for Go with first-class OpenAPI 3.1 generation. Built on
+An HTTP framework for Go with first-class OpenAPI 3.2 generation. Built on
 `net/http` so the entire `http.Handler` middleware ecosystem stays
 compatible. Ships as independent modules — pull only what you need.
 
@@ -20,7 +20,7 @@ compatible. Ships as independent modules — pull only what you need.
   `openapi.Summary`, `openapi.Tags`, `openapi.Returns`, and
   `openapi.ReturnsBody[T]`. Schemas for named struct types are hoisted into
   `components/schemas` and referenced via `$ref`. The spec is valid
-  OpenAPI 3.1 with proper top-level field order.
+  OpenAPI 3.2 with proper top-level field order.
 - **Multi-module.** `router` is the runtime, `openapi` is the spec
   generator. Independent versioning; the router has zero dependencies on
   the openapi package.

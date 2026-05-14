@@ -16,7 +16,7 @@ You install only the modules you use.
 
 | Module | Purpose |
 |---|---|
-| `openapi` | OpenAPI 3.1 spec generation from explicit endpoint annotations. Depends on `router`. |
+| `openapi` | OpenAPI 3.2 spec generation from explicit endpoint annotations. Depends on `router`. |
 
 ## Middleware
 

@@ -204,7 +204,7 @@ func TestSpec_TopLevelFields(t *testing.T) {
 		Info{Title: "T", Version: "1.0", Description: "d"},
 	).Spec(r)
 
-	if spec.OpenAPI != "3.1.0" {
+	if spec.OpenAPI != "3.2.0" {
 		t.Errorf("openapi: %q", spec.OpenAPI)
 	}
 	if spec.JSONSchemaDialect != "https://spec.openapis.org/oas/3.1/dialect/base" {

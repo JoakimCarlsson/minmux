@@ -1,7 +1,7 @@
 # Quick Start
 
 This walkthrough builds a minimal Todo API end-to-end: routing, typed
-parameter binding, JSON responses, error cases, and a served OpenAPI 3.1
+parameter binding, JSON responses, error cases, and a served OpenAPI 3.2
 spec. The complete source lives in `examples/todo/`.
 
 ## Hello world

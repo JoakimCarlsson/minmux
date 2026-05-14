@@ -1,7 +1,7 @@
 package openapi
 
 // Document is the root OpenAPI document. Field order in JSON output follows
-// the conventional OpenAPI 3.1 layout: openapi, info, dialect, paths, components.
+// the conventional OpenAPI 3.2 layout: openapi, info, dialect, paths, components.
 type Document struct {
 	OpenAPI           string               `json:"openapi"`
 	Info              Info                 `json:"info"`
