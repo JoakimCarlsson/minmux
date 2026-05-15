@@ -113,6 +113,18 @@ func (r *Router) Delete(path string, handler any, opts ...Option) *Endpoint {
 	return r.register(http.MethodDelete, path, handler, nil, opts)
 }
 
+// Options registers a typed OPTIONS handler with optional annotations.
+func (r *Router) Options(path string, handler any, opts ...Option) *Endpoint {
+	return r.register(http.MethodOptions, path, handler, nil, opts)
+}
+
+// Head registers a typed HEAD handler with optional annotations. Note that
+// net/http auto-serves HEAD from GET handlers; define a HEAD handler only when
+// you need behavior that diverges from the corresponding GET.
+func (r *Router) Head(path string, handler any, opts ...Option) *Endpoint {
+	return r.register(http.MethodHead, path, handler, nil, opts)
+}
+
 // Group creates a route group with a shared prefix. Options passed here
 // apply to every endpoint registered through the group.
 func (r *Router) Group(prefix string, opts ...Option) *Group {

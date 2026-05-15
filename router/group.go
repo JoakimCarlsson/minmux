@@ -48,6 +48,17 @@ func (g *Group) Delete(path string, handler any, opts ...Option) *Endpoint {
 	return g.router.register(http.MethodDelete, path, handler, g, opts)
 }
 
+// Options registers a typed OPTIONS handler scoped to this group.
+func (g *Group) Options(path string, handler any, opts ...Option) *Endpoint {
+	return g.router.register(http.MethodOptions, path, handler, g, opts)
+}
+
+// Head registers a typed HEAD handler scoped to this group. See Router.Head
+// for guidance on when to define HEAD separately from GET.
+func (g *Group) Head(path string, handler any, opts ...Option) *Endpoint {
+	return g.router.register(http.MethodHead, path, handler, g, opts)
+}
+
 func groupPrefix(g *Group) string {
 	if g == nil {
 		return ""

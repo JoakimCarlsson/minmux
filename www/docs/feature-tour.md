@@ -38,6 +38,42 @@ func main() {
 `http.ListenAndServe`, `http.Server{}`, `httptest.NewServer`, or any
 other consumer of an `http.Handler`.
 
+## HTTP methods
+
+`Router` and `Group` expose a typed registration method for each of the
+common HTTP verbs:
+
+```go
+r.Get("/widgets",         listWidgets)
+r.Post("/widgets",        createWidget)
+r.Put("/widgets/{id}",    replaceWidget)
+r.Patch("/widgets/{id}",  patchWidget)
+r.Delete("/widgets/{id}", deleteWidget)
+r.Options("/widgets",     describeMethods)
+r.Head("/widgets/{id}",   probeWidget)
+```
+
+All seven verbs flow through the same dispatcher, so they all support
+typed Params binding, per-route middleware, and the full
+`openapi.*` option set, and they all appear in the generated spec under
+their corresponding OAS 3.2 operation slot.
+
+`net/http` already auto-serves `HEAD` for any registered `GET` handler
+by suppressing the response body, so reach for `r.Head` only when you
+need behavior that diverges from the matching `GET` — for example, a
+faster existence probe that skips an expensive load, or different
+response headers. `OPTIONS` is more commonly hand-written: CORS
+preflights are usually handled by middleware, but the typed registration
+is the right tool when you want to advertise a custom `Allow` set, run
+auth probes, or expose capability discovery (e.g. WebDAV-style).
+
+For raw method/path registration that bypasses the typed pipeline and
+the OpenAPI generator — useful for serving static handlers like the
+spec itself — use `r.HandleFunc(method, path, handler)` or
+`r.Handle(method, path, handler)`.
+
+The full runnable example for these verbs lives in `examples/verbs/`.
+
 ## Path parameters
 
 A Params struct with `path` field tags drives the binding:
