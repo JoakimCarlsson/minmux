@@ -10,7 +10,7 @@ You install only the modules you use.
 
 | Module | Purpose |
 |---|---|
-| `router` | Routing, parameter binding (path / query / header / form / file / body), response context helpers, ProblemDetails, multipart and raw-stream uploads, plus first-class streaming response writers (`c.SSE`, `c.Stream`, `c.MultipartMixed`) and `iter.Seq2[T, error]` body binders for SSE / JSONL / JSON-seq / multipart/mixed inputs. Built on `net/http`. Zero external dependencies. |
+| `router` | Routing, parameter binding (path / query / header / form / file / body), response context helpers, ProblemDetails, multipart and raw-stream uploads, plus first-class streaming response writers (`c.SSE`, `c.Stream`, `c.MultipartMixed`) and `iter.Seq2[T, error]` body binders for SSE / JSONL / JSON-seq / multipart/mixed inputs. Static-file and single-page-app helpers (`Static`, `SPA`). Built on `net/http`. Zero external dependencies. |
 
 ## Documentation
 

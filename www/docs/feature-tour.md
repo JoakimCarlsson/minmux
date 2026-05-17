@@ -587,6 +587,39 @@ users.Post("", createUser)
 
 The `/api/v1/users/{id}` endpoint inherits tags `["v1", "Users"]`.
 
+## Static files and SPAs
+
+`Router.Static(prefix, http.FileSystem)` mounts a generic file server.
+Hashed or versioned assets are served as-is; missing paths return 404.
+
+```go
+r.Static("/assets/", http.Dir("./public/assets"))
+```
+
+`Router.SPA(fs.FS)` mounts a single-page app at `/`. Requests for files
+that exist in the FS are served as-is; any other GET path serves
+`index.html` so the client-side router can claim the URL. Returns an
+error if `index.html` is missing.
+
+```go
+import (
+    "embed"
+    "io/fs"
+)
+
+//go:embed all:dist
+var dist embed.FS
+
+distFS, _ := fs.Sub(dist, "dist")
+if err := r.SPA(distFS); err != nil {
+    log.Fatal(err)
+}
+```
+
+More specific routes (`/api/v1/...`, `/openapi.json`, `/docs`) take
+precedence over the SPA catch-all per `net/http` ServeMux semantics, so
+mount them on the same router without conflict.
+
 ## OpenAPI generation
 
 Annotate routes with options from the `openapi` package. The spec is
