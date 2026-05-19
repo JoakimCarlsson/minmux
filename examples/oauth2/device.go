@@ -169,7 +169,9 @@ type verifyGrant struct {
 }
 
 func (s *store) deviceVerifyGET(c *router.Context) {
-	uc := strings.ToUpper(strings.TrimSpace(c.Request.URL.Query().Get("user_code")))
+	uc := strings.ToUpper(
+		strings.TrimSpace(c.Request.URL.Query().Get("user_code")),
+	)
 	view := verifyView{UserCode: uc}
 	if uc != "" {
 		s.mu.Lock()
@@ -183,7 +185,11 @@ func (s *store) deviceVerifyGET(c *router.Context) {
 			view.Message = "Code already used."
 			view.MsgClass = "err"
 		default:
-			view.Grant = &verifyGrant{ClientID: g.clientID, Scopes: g.scopes, UserCode: g.userCode}
+			view.Grant = &verifyGrant{
+				ClientID: g.clientID,
+				Scopes:   g.scopes,
+				UserCode: g.userCode,
+			}
 		}
 	}
 	c.Writer.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -225,7 +231,9 @@ func (s *store) deviceVerifyPOST(c *router.Context) {
 
 func (s *store) deviceToken(c *router.Context) {
 	_ = c.Request.ParseForm()
-	if c.Request.FormValue("grant_type") != "urn:ietf:params:oauth:grant-type:device_code" {
+	if c.Request.FormValue(
+		"grant_type",
+	) != "urn:ietf:params:oauth:grant-type:device_code" {
 		tokenErr(c, "unsupported_grant_type")
 		return
 	}

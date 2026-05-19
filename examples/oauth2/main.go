@@ -1,10 +1,10 @@
 // oauth2 is a single-process showcase of three OAuth2 grant types
 // served by one minmux router on :8080:
 //
-//   • Authorization Code + PKCE — /oauth/auth-code/{authorize,token}
-//   • Client Credentials        — /oauth/client-credentials/token
-//   • Device Authorization      — /oauth/device/{device_authorization,token}
-//                                 plus a user-facing approval page at /device
+//   - Authorization Code + PKCE — /oauth/auth-code/{authorize,token}
+//   - Client Credentials        — /oauth/client-credentials/token
+//   - Device Authorization      — /oauth/device/{device_authorization,token}
+//     plus a user-facing approval page at /device
 //
 // All three flows feed the same in-memory bearer store, and one OAS 3.2
 // security scheme (`oauth2`) advertises all three flows under `flows:`
@@ -76,14 +76,22 @@ func main() {
 
 	oauthSrv := r.Group("", openapi.Tags("OAuth2 Server"), openapi.NoSecurity())
 
-	oauthSrv.Get("/oauth/auth-code/authorize", s.authCodeAuthorizeGET,
+	oauthSrv.Get(
+		"/oauth/auth-code/authorize",
+		s.authCodeAuthorizeGET,
 		openapi.Summary("Authorization endpoint (consent screen)"),
-		openapi.Description("Renders an HTML consent page. PKCE S256 required."),
+		openapi.Description(
+			"Renders an HTML consent page. PKCE S256 required.",
+		),
 		openapi.Returns(http.StatusOK, "Consent HTML"),
 	)
-	oauthSrv.Post("/oauth/auth-code/authorize", s.authCodeAuthorizePOST,
+	oauthSrv.Post(
+		"/oauth/auth-code/authorize",
+		s.authCodeAuthorizePOST,
 		openapi.Summary("Authorization endpoint (decision submit)"),
-		openapi.Description("Redirects back to redirect_uri with ?code= on allow, ?error= on deny."),
+		openapi.Description(
+			"Redirects back to redirect_uri with ?code= on allow, ?error= on deny.",
+		),
 		openapi.Returns(http.StatusFound, "Redirect to redirect_uri"),
 	)
 	oauthSrv.Post("/oauth/auth-code/token", s.authCodeToken,
@@ -91,26 +99,46 @@ func main() {
 		openapi.ReturnsBody[TokenResponse](http.StatusOK, "Access token"),
 		openapi.ReturnsBody[TokenError](http.StatusBadRequest, "OAuth2 error"),
 	)
-	oauthSrv.Post("/oauth/client-credentials/token", s.clientCredsToken,
+	oauthSrv.Post(
+		"/oauth/client-credentials/token",
+		s.clientCredsToken,
 		openapi.Summary("Token endpoint (client_credentials)"),
-		openapi.Description("Credentials may be HTTP Basic or in the form body."),
+		openapi.Description(
+			"Credentials may be HTTP Basic or in the form body.",
+		),
 		openapi.ReturnsBody[TokenResponse](http.StatusOK, "Access token"),
 		openapi.ReturnsBody[TokenError](http.StatusBadRequest, "OAuth2 error"),
 	)
-	oauthSrv.Post("/oauth/device/device_authorization", s.deviceAuth,
+	oauthSrv.Post(
+		"/oauth/device/device_authorization",
+		s.deviceAuth,
 		openapi.Summary("Device authorization endpoint (RFC 8628 §3.1)"),
-		openapi.ReturnsBody[DeviceCodeResponse](http.StatusOK, "device_code + user_code"),
+		openapi.ReturnsBody[DeviceCodeResponse](
+			http.StatusOK,
+			"device_code + user_code",
+		),
 		openapi.ReturnsBody[TokenError](http.StatusBadRequest, "OAuth2 error"),
 	)
-	oauthSrv.Post("/oauth/device/token", s.deviceToken,
+	oauthSrv.Post(
+		"/oauth/device/token",
+		s.deviceToken,
 		openapi.Summary("Token endpoint (device_code)"),
-		openapi.Description("Poll until the user approves. Returns authorization_pending / slow_down / access_denied / expired_token until then."),
+		openapi.Description(
+			"Poll until the user approves. Returns authorization_pending / slow_down / access_denied / expired_token until then.",
+		),
 		openapi.ReturnsBody[TokenResponse](http.StatusOK, "Access token"),
-		openapi.ReturnsBody[TokenError](http.StatusBadRequest, "Pending or error"),
+		openapi.ReturnsBody[TokenError](
+			http.StatusBadRequest,
+			"Pending or error",
+		),
 	)
-	oauthSrv.Get("/device", s.deviceVerifyGET,
+	oauthSrv.Get(
+		"/device",
+		s.deviceVerifyGET,
 		openapi.Summary("Device verification page"),
-		openapi.Description("User-facing HTML form: paste the user_code shown on the device, then approve or deny."),
+		openapi.Description(
+			"User-facing HTML form: paste the user_code shown on the device, then approve or deny.",
+		),
 		openapi.Returns(http.StatusOK, "Verification HTML"),
 	)
 	oauthSrv.Post("/device", s.deviceVerifyPOST,
@@ -120,19 +148,29 @@ func main() {
 
 	api := r.Group("/api", router.Middleware(s.requireToken))
 
-	api.Get("/profile", profile,
+	api.Get(
+		"/profile",
+		profile,
 		openapi.Tags("Auth Code"),
 		openapi.Summary("Current principal (auth-code+pkce)"),
 		openapi.Security("oauth2", "profile:read"),
 		openapi.ReturnsBody[Profile](http.StatusOK, "Profile"),
-		openapi.ReturnsBody[router.ProblemDetails](http.StatusUnauthorized, "Missing or invalid token"),
+		openapi.ReturnsBody[router.ProblemDetails](
+			http.StatusUnauthorized,
+			"Missing or invalid token",
+		),
 	)
-	api.Post("/todos", createTodo,
+	api.Post(
+		"/todos",
+		createTodo,
 		openapi.Tags("Auth Code"),
 		openapi.Summary("Create a todo"),
 		openapi.Security("oauth2", "todos:write"),
 		openapi.ReturnsBody[TodoItem](http.StatusCreated, "Created"),
-		openapi.ReturnsBody[router.ProblemDetails](http.StatusForbidden, "Missing scope"),
+		openapi.ReturnsBody[router.ProblemDetails](
+			http.StatusForbidden,
+			"Missing scope",
+		),
 	)
 
 	api.Get("/metrics", listMetrics,
@@ -166,7 +204,10 @@ func main() {
 	gen.Servers = []*openapi.Server{{URL: issuer, Description: "Local"}}
 	gen.Tags = []*openapi.Tag{
 		{Name: "Auth Code", Description: "Authorization Code + PKCE flow"},
-		{Name: "Client Credentials", Description: "Service-to-service OAuth2 grant"},
+		{
+			Name:        "Client Credentials",
+			Description: "Service-to-service OAuth2 grant",
+		},
 		{Name: "Device", Description: "RFC 8628 device authorization grant"},
 	}
 
@@ -212,13 +253,19 @@ func main() {
 				"oauth2": {
 					Flows: map[string]scalar.FlowAuth{
 						"authorizationCode": {
-							ClientID:       authCodeClientID,
-							SelectedScopes: []string{"profile:read", "todos:write"},
+							ClientID: authCodeClientID,
+							SelectedScopes: []string{
+								"profile:read",
+								"todos:write",
+							},
 						},
 						"clientCredentials": {
-							ClientID:       "svc-reporter",
-							ClientSecret:   "s3cret",
-							SelectedScopes: []string{"metrics:read", "metrics:write"},
+							ClientID:     "svc-reporter",
+							ClientSecret: "s3cret",
+							SelectedScopes: []string{
+								"metrics:read",
+								"metrics:write",
+							},
 						},
 						"deviceAuthorization": {
 							ClientID:       deviceClientID,
@@ -230,6 +277,10 @@ func main() {
 		},
 	}))
 
-	fmt.Println("listening on", addr, "(docs at /docs, device verify at /device)")
+	fmt.Println(
+		"listening on",
+		addr,
+		"(docs at /docs, device verify at /device)",
+	)
 	log.Fatal(http.ListenAndServe(addr, r))
 }

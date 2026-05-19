@@ -84,7 +84,11 @@ func (s *store) requireToken(next http.Handler) http.Handler {
 			writeProblem(w, http.StatusUnauthorized, "invalid or expired token")
 			return
 		}
-		p := &principal{subject: tok.subject, clientID: tok.clientID, scopes: tok.scopes}
+		p := &principal{
+			subject:  tok.subject,
+			clientID: tok.clientID,
+			scopes:   tok.scopes,
+		}
 		ctx := context.WithValue(r.Context(), ctxKey{}, p)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

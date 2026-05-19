@@ -19,7 +19,10 @@ func (r *Router) Static(prefix string, fsys http.FileSystem) {
 	if !strings.HasSuffix(prefix, "/") {
 		prefix += "/"
 	}
-	handler := http.StripPrefix(strings.TrimSuffix(prefix, "/"), http.FileServer(fsys))
+	handler := http.StripPrefix(
+		strings.TrimSuffix(prefix, "/"),
+		http.FileServer(fsys),
+	)
 	r.mux.Handle(http.MethodGet+" "+prefix, handler)
 }
 
@@ -36,17 +39,20 @@ func (r *Router) SPA(fsys fs.FS) error {
 	}
 	fileServer := http.FileServer(http.FS(fsys))
 
-	r.mux.HandleFunc(http.MethodGet+" /", func(w http.ResponseWriter, req *http.Request) {
-		path := strings.TrimPrefix(req.URL.Path, "/")
-		if path != "" {
-			if _, err := fs.Stat(fsys, path); err == nil {
-				fileServer.ServeHTTP(w, req)
-				return
+	r.mux.HandleFunc(
+		http.MethodGet+" /",
+		func(w http.ResponseWriter, req *http.Request) {
+			path := strings.TrimPrefix(req.URL.Path, "/")
+			if path != "" {
+				if _, err := fs.Stat(fsys, path); err == nil {
+					fileServer.ServeHTTP(w, req)
+					return
+				}
 			}
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-cache")
-		_, _ = w.Write(index)
-	})
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-cache")
+			_, _ = w.Write(index)
+		},
+	)
 	return nil
 }

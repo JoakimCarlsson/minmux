@@ -86,7 +86,8 @@ func (s *store) authCodeAuthorizeGET(c *router.Context) {
 		http.Error(c.Writer, "invalid_client", http.StatusBadRequest)
 		return
 	}
-	if q.Get("code_challenge") == "" || q.Get("code_challenge_method") != "S256" {
+	if q.Get("code_challenge") == "" ||
+		q.Get("code_challenge_method") != "S256" {
 		http.Error(c.Writer, "PKCE S256 required", http.StatusBadRequest)
 		return
 	}
@@ -162,7 +163,8 @@ func (s *store) authCodeToken(c *router.Context) {
 		tokenErr(c, "invalid_grant")
 		return
 	}
-	if c.Request.FormValue("client_id") != rec.clientID || c.Request.FormValue("redirect_uri") != rec.redirectURI {
+	if c.Request.FormValue("client_id") != rec.clientID ||
+		c.Request.FormValue("redirect_uri") != rec.redirectURI {
 		tokenErr(c, "invalid_grant")
 		return
 	}

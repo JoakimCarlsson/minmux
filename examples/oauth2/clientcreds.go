@@ -65,7 +65,8 @@ func (s *store) clientCredsToken(c *router.Context) {
 	}
 
 	cl, found := clientRegistry[id]
-	if !found || subtle.ConstantTimeCompare([]byte(secret), []byte(cl.secret)) != 1 {
+	if !found ||
+		subtle.ConstantTimeCompare([]byte(secret), []byte(cl.secret)) != 1 {
 		tokenErr(c, "invalid_client")
 		return
 	}
