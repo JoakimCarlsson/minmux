@@ -203,6 +203,31 @@ func main() {
 	r.HandleFunc(http.MethodGet, "/docs", scalar.HandlerWith(scalar.Config{
 		SpecURL: "/openapi.json",
 		Title:   "minmux OAuth2 Flows",
+		// Pre-fill the Authorize dialog with the baked-in demo client IDs
+		// (and the client_credentials secret) so visitors can click Try-It
+		// without copying values out of the source.
+		Authentication: &scalar.Authentication{
+			PreferredSecurityScheme: "oauth2",
+			SecuritySchemes: map[string]scalar.SchemeAuth{
+				"oauth2": {
+					Flows: map[string]scalar.FlowAuth{
+						"authorizationCode": {
+							ClientID:       authCodeClientID,
+							SelectedScopes: []string{"profile:read", "todos:write"},
+						},
+						"clientCredentials": {
+							ClientID:       "svc-reporter",
+							ClientSecret:   "s3cret",
+							SelectedScopes: []string{"metrics:read", "metrics:write"},
+						},
+						"deviceAuthorization": {
+							ClientID:       deviceClientID,
+							SelectedScopes: []string{"channels:read"},
+						},
+					},
+				},
+			},
+		},
 	}))
 
 	fmt.Println("listening on", addr, "(docs at /docs, device verify at /device)")

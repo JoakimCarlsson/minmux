@@ -34,6 +34,55 @@ type Config struct {
 	// CDNURL overrides the script src. Empty uses DefaultCDNURL.
 	// Set to a self-hosted bundle for airgapped deployments.
 	CDNURL string
+
+	// Authentication pre-fills Scalar's Authorize dialog. Nil renders no
+	// `authentication` key.
+	Authentication *Authentication
+}
+
+// Authentication mirrors Scalar's createApiReference `authentication`
+// option. Only the fields minmux's callers tend to need are typed;
+// callers needing exotic shapes can vendor a copy.
+type Authentication struct {
+	// PreferredSecurityScheme is the scheme name highlighted in the
+	// Authorize dialog when multiple schemes exist.
+	PreferredSecurityScheme string `json:"preferredSecurityScheme,omitempty"`
+
+	// SecuritySchemes carries per-scheme prefill, keyed by the scheme
+	// name as it appears in the OpenAPI document's
+	// `components.securitySchemes`.
+	SecuritySchemes map[string]SchemeAuth `json:"securitySchemes,omitempty"`
+}
+
+// SchemeAuth is the prefill for a single named security scheme.
+type SchemeAuth struct {
+	// Flows carries per-flow OAuth2 prefill, keyed by the OAS flow name
+	// (authorizationCode, clientCredentials, deviceAuthorization,
+	// password, implicit).
+	Flows map[string]FlowAuth `json:"flows,omitempty"`
+
+	// Token is the prefilled bearer/apiKey value for http or apiKey
+	// schemes (not used for oauth2).
+	Token string `json:"token,omitempty"`
+}
+
+// FlowAuth is the prefill for one OAuth2 flow on one scheme.
+type FlowAuth struct {
+	// ClientID populates the Authorize dialog's client_id field.
+	// Serialised as Scalar's `x-scalar-client-id` extension key.
+	ClientID string `json:"x-scalar-client-id,omitempty"`
+
+	// ClientSecret prefills the secret field for confidential client
+	// flows (client_credentials, password). Only useful in demo
+	// environments; never commit a real production secret here.
+	ClientSecret string `json:"clientSecret,omitempty"`
+
+	// SelectedScopes lists scopes that should start checked in the
+	// Authorize dialog.
+	SelectedScopes []string `json:"selectedScopes,omitempty"`
+
+	// Token prefills the access token field, skipping the live flow.
+	Token string `json:"token,omitempty"`
 }
 
 // Handler returns an http.HandlerFunc that serves the Scalar API Reference
@@ -59,6 +108,9 @@ func HandlerWith(cfg Config) http.HandlerFunc {
 	}
 	if cfg.ProxyURL != "" {
 		scalarCfg["proxyUrl"] = cfg.ProxyURL
+	}
+	if cfg.Authentication != nil {
+		scalarCfg["authentication"] = cfg.Authentication
 	}
 	// encoding/json escapes <, >, & as < > &, making the
 	// payload safe to drop into an inline <script> regardless of caller

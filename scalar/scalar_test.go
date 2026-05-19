@@ -83,6 +83,39 @@ func TestHandlerWith_OmitsEmptyOptionalFields(t *testing.T) {
 	if strings.Contains(body, `"proxyUrl"`) {
 		t.Errorf("empty ProxyURL should be omitted")
 	}
+	if strings.Contains(body, `"authentication"`) {
+		t.Errorf("nil Authentication should be omitted")
+	}
+}
+
+func TestHandlerWith_AuthenticationPassthrough(t *testing.T) {
+	_, body := get(t, HandlerWith(Config{
+		SpecURL: "/openapi.json",
+		Authentication: &Authentication{
+			PreferredSecurityScheme: "oauth2",
+			SecuritySchemes: map[string]SchemeAuth{
+				"oauth2": {
+					Flows: map[string]FlowAuth{
+						"clientCredentials": {
+							ClientID:       "svc-reporter",
+							SelectedScopes: []string{"metrics:read"},
+						},
+					},
+				},
+			},
+		},
+	}))
+
+	for _, want := range []string{
+		`"authentication":{`,
+		`"preferredSecurityScheme":"oauth2"`,
+		`"x-scalar-client-id":"svc-reporter"`,
+		`"selectedScopes":["metrics:read"]`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body missing %q; got:\n%s", want, body)
+		}
+	}
 }
 
 func TestHandler_EscapesScriptInjection(t *testing.T) {

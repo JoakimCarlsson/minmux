@@ -72,6 +72,63 @@ r.HandleFunc(http.MethodGet, "/docs", scalar.HandlerWith(scalar.Config{
 | `Theme` | Scalar theme name (e.g. `default`, `moon`, `purple`). Empty uses Scalar's default. |
 | `ProxyURL` | Optional CORS proxy passed to Scalar as `proxyUrl`. Set only when `SpecURL` is cross-origin and the server lacks CORS. |
 | `CDNURL` | Override the `<script src>`. Empty uses `scalar.DefaultCDNURL` (jsDelivr, unpinned `@latest`). Set to a self-hosted bundle for airgapped deployments, or pin a major like `@scalar/api-reference@1` for stability. |
+| `Authentication` | Pre-fills Scalar's Authorize dialog (default client_id, scopes, preferred scheme). See [Pre-filling the Authorize dialog](#pre-filling-the-authorize-dialog). |
+
+## Pre-filling the Authorize dialog
+
+Scalar shows an Authorize button next to every secured operation; clicking
+it opens a dialog where the user types their client_id (and, for some
+flows, scopes / secret) before running an OAuth2 flow. For demo or
+internal-staging instances you can pre-fill those values via
+`Config.Authentication`:
+
+```go
+r.HandleFunc(http.MethodGet, "/docs", scalar.HandlerWith(scalar.Config{
+    SpecURL: "/openapi.json",
+    Authentication: &scalar.Authentication{
+        PreferredSecurityScheme: "oauth2",
+        SecuritySchemes: map[string]scalar.SchemeAuth{
+            "oauth2": {
+                Flows: map[string]scalar.FlowAuth{
+                    "authorizationCode": {
+                        ClientID:       "spa-app",
+                        SelectedScopes: []string{"profile:read", "todos:write"},
+                    },
+                    "clientCredentials": {
+                        ClientID:       "svc-reporter",
+                        ClientSecret:   "s3cret", // demo only — never a real production secret
+                        SelectedScopes: []string{"metrics:read"},
+                    },
+                    "deviceAuthorization": {
+                        ClientID:       "tv-app",
+                        SelectedScopes: []string{"channels:read"},
+                    },
+                },
+            },
+        },
+    },
+}))
+```
+
+Field reference:
+
+| Field | Purpose |
+|---|---|
+| `Authentication.PreferredSecurityScheme` | Scheme name (as it appears in `components.securitySchemes`) that the Authorize dialog opens to when multiple schemes exist. |
+| `SchemeAuth.Flows` | Per-flow OAuth2 prefill, keyed by OAS flow name: `authorizationCode`, `clientCredentials`, `deviceAuthorization`, `password`, `implicit`. |
+| `SchemeAuth.Token` | Prefilled bearer / API-key value (for `http` and `apiKey` schemes, not `oauth2`). |
+| `FlowAuth.ClientID` | Serialised as Scalar's `x-scalar-client-id` extension key. |
+| `FlowAuth.ClientSecret` | Prefills the secret field for confidential-client flows. |
+| `FlowAuth.SelectedScopes` | Scopes that start checked in the dialog. |
+| `FlowAuth.Token` | Prefills an access token directly, skipping the live flow. |
+
+This is a Scalar-side convenience: the values live in the rendered HTML,
+not in the OpenAPI document, so other UIs (Redoc, Swagger UI) won't see
+them. Never commit a real production secret here.
+
+`examples/oauth2/` uses this to pre-fill demo client IDs for all three
+OAuth2 flows it hosts, so the Authorize dialog opens with the right
+values already filled in.
 
 ## Configuring base URLs
 

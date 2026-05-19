@@ -12,7 +12,11 @@ describes what consumers must satisfy; enforcement is conventional
 middleware (your JWT validator, mTLS terminator, etc.). This keeps the
 router dependency-free and lets you slot in any auth stack.
 
-A runnable end-to-end showcase lives in `examples/security/`.
+A runnable end-to-end showcase lives in `examples/security/`. For a
+self-contained authorization server that actually mints tokens through
+the Authorization Code + PKCE, Client Credentials, and Device
+Authorization flows — and a Scalar UI wired to use them — see
+`examples/oauth2/`.
 
 ## Registering schemes
 
