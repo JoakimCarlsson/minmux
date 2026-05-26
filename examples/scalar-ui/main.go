@@ -34,13 +34,13 @@ type CreatePetCommand struct {
 
 type ListPetsParams struct {
 	// Tag is optional (pointer) and constrained to a known set of values.
-	Tag *string `query:"tag"    enum:"dog,cat,bird,fish"`
+	Tag *string `query:"tag" enum:"dog,cat,bird,fish"`
 	// Limit is required, bounded, with a default.
-	Limit int `query:"limit"                           minimum:"1" maximum:"100" default:"20"`
+	Limit int `query:"limit" minimum:"1" maximum:"100" default:"20"`
 	// Cursor is deprecated; renderers strike it through.
-	Cursor *string `query:"cursor"                                                                 deprecated:"true"`
+	Cursor *string `query:"cursor" deprecated:"true"`
 	// TraceID is a required header with a UUID format constraint.
-	TraceID string `                                                                                                 header:"X-Trace-Id" format:"uuid"`
+	TraceID string `header:"X-Trace-Id" format:"uuid"`
 }
 
 type GetPetParams struct {

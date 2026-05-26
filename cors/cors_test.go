@@ -100,7 +100,8 @@ func TestCredentials_WildcardEchoesOrigin(t *testing.T) {
 	})
 
 	rec := do(t, mw, "GET", "https://app.example.com", nil)
-	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://app.example.com" {
+	if got := rec.Header().
+		Get("Access-Control-Allow-Origin"); got != "https://app.example.com" {
 		t.Errorf(
 			"Allow-Origin with credentials must echo origin, not *, got %q",
 			got,
@@ -144,10 +145,12 @@ func TestPreflight(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Errorf("preflight status: want 204, got %d", rec.Code)
 	}
-	if got := rec.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, DELETE" {
+	if got := rec.Header().
+		Get("Access-Control-Allow-Methods"); got != "GET, POST, DELETE" {
 		t.Errorf("Allow-Methods: %q", got)
 	}
-	if got := rec.Header().Get("Access-Control-Allow-Headers"); got != "Authorization, Content-Type" {
+	if got := rec.Header().
+		Get("Access-Control-Allow-Headers"); got != "Authorization, Content-Type" {
 		t.Errorf("Allow-Headers: %q", got)
 	}
 	if got := rec.Header().Get("Access-Control-Max-Age"); got != "3600" {
@@ -176,7 +179,8 @@ func TestExposeHeaders(t *testing.T) {
 	})
 
 	rec := do(t, mw, "GET", "https://app.example.com", nil)
-	if got := rec.Header().Get("Access-Control-Expose-Headers"); got != "X-Total-Count, X-Request-Id" {
+	if got := rec.Header().
+		Get("Access-Control-Expose-Headers"); got != "X-Total-Count, X-Request-Id" {
 		t.Errorf("Expose-Headers: %q", got)
 	}
 }
@@ -189,7 +193,8 @@ func TestAllowOriginFunc(t *testing.T) {
 	})
 
 	rec := do(t, mw, "GET", "https://yes.example.com", nil)
-	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://yes.example.com" {
+	if got := rec.Header().
+		Get("Access-Control-Allow-Origin"); got != "https://yes.example.com" {
 		t.Errorf("func-allowed origin: %q", got)
 	}
 
@@ -205,7 +210,8 @@ func TestAllowOriginFunc(t *testing.T) {
 func TestCaseInsensitiveOriginMatch(t *testing.T) {
 	mw := New(Options{AllowOrigins: []string{"https://App.Example.com"}})
 	rec := do(t, mw, "GET", "https://app.example.com", nil)
-	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://app.example.com" {
+	if got := rec.Header().
+		Get("Access-Control-Allow-Origin"); got != "https://app.example.com" {
 		t.Errorf("case-insensitive match failed: %q", got)
 	}
 }

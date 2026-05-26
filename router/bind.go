@@ -302,7 +302,10 @@ func bindBodyField(
 		field.Set(seq)
 		return nil
 	default:
-		if err := cfg.codec.Decode(r.Body, field.Addr().Interface()); err != nil {
+		if err := cfg.codec.Decode(
+			r.Body,
+			field.Addr().Interface(),
+		); err != nil {
 			return BadRequest("body: " + err.Error())
 		}
 		return nil
@@ -411,7 +414,10 @@ func jsonlIterator(
 				continue
 			}
 			vp := reflect.New(itemType)
-			if err := codec.Decode(bytes.NewReader(line), vp.Interface()); err != nil {
+			if err := codec.Decode(
+				bytes.NewReader(line),
+				vp.Interface(),
+			); err != nil {
 				if !yield(reflect.Zero(itemType).Interface(), err) {
 					return
 				}
@@ -456,7 +462,10 @@ func jsonSeqIterator(
 				continue
 			}
 			vp := reflect.New(itemType)
-			if decErr := codec.Decode(bytes.NewReader(record), vp.Interface()); decErr != nil {
+			if decErr := codec.Decode(
+				bytes.NewReader(record),
+				vp.Interface(),
+			); decErr != nil {
 				if !yield(reflect.Zero(itemType).Interface(), decErr) {
 					return
 				}
