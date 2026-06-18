@@ -66,9 +66,14 @@ func maybe(c *router.Context) {
 func main() {
 	r := router.New()
 
-	gen := openapi.NewGenerator(openapi.Info{Title: "auth example", Version: "0.1.0"})
+	gen := openapi.NewGenerator(
+		openapi.Info{Title: "auth example", Version: "0.1.0"},
+	)
 	gen.SecuritySchemes = map[string]*openapi.SecurityScheme{
-		bearerScheme: openapi.BearerAuth("", "Send: Authorization: Bearer secret-<user>"),
+		bearerScheme: openapi.BearerAuth(
+			"",
+			"Send: Authorization: Bearer secret-<user>",
+		),
 	}
 
 	authn := auth.New(r, auth.Config{

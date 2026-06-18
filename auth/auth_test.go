@@ -70,14 +70,71 @@ func TestEnforcement(t *testing.T) {
 		wantWho  string
 	}{
 		{"no annotation passes", nil, "alice", http.StatusOK, ""},
-		{"NoSecurity passes", []router.Option{openapi.NoSecurity()}, "alice", http.StatusOK, ""},
-		{"required + valid", []router.Option{openapi.Security(scheme)}, "alice", http.StatusOK, "user-alice"},
-		{"required + missing → 401", []router.Option{openapi.Security(scheme)}, "", http.StatusUnauthorized, ""},
-		{"required + invalid → 401", []router.Option{openapi.Security(scheme)}, "bad", http.StatusUnauthorized, ""},
-		{"required + forbidden → 403", []router.Option{openapi.Security(scheme)}, "forbidden", http.StatusForbidden, ""},
-		{"optional + missing → anonymous", []router.Option{openapi.OptionalSecurity(), openapi.Security(scheme)}, "", http.StatusOK, ""},
-		{"optional + valid → principal", []router.Option{openapi.OptionalSecurity(), openapi.Security(scheme)}, "alice", http.StatusOK, "user-alice"},
-		{"optional + invalid → 401", []router.Option{openapi.OptionalSecurity(), openapi.Security(scheme)}, "bad", http.StatusUnauthorized, ""},
+		{
+			"NoSecurity passes",
+			[]router.Option{openapi.NoSecurity()},
+			"alice",
+			http.StatusOK,
+			"",
+		},
+		{
+			"required + valid",
+			[]router.Option{openapi.Security(scheme)},
+			"alice",
+			http.StatusOK,
+			"user-alice",
+		},
+		{
+			"required + missing → 401",
+			[]router.Option{openapi.Security(scheme)},
+			"",
+			http.StatusUnauthorized,
+			"",
+		},
+		{
+			"required + invalid → 401",
+			[]router.Option{openapi.Security(scheme)},
+			"bad",
+			http.StatusUnauthorized,
+			"",
+		},
+		{
+			"required + forbidden → 403",
+			[]router.Option{openapi.Security(scheme)},
+			"forbidden",
+			http.StatusForbidden,
+			"",
+		},
+		{
+			"optional + missing → anonymous",
+			[]router.Option{
+				openapi.OptionalSecurity(),
+				openapi.Security(scheme),
+			},
+			"",
+			http.StatusOK,
+			"",
+		},
+		{
+			"optional + valid → principal",
+			[]router.Option{
+				openapi.OptionalSecurity(),
+				openapi.Security(scheme),
+			},
+			"alice",
+			http.StatusOK,
+			"user-alice",
+		},
+		{
+			"optional + invalid → 401",
+			[]router.Option{
+				openapi.OptionalSecurity(),
+				openapi.Security(scheme),
+			},
+			"bad",
+			http.StatusUnauthorized,
+			"",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

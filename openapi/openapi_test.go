@@ -275,7 +275,7 @@ type pathParams struct {
 }
 
 type queryParams struct {
-	Limit int    `query:"limit" desc:"max rows to return"`
+	Limit int    `query:"limit"        desc:"max rows to return"`
 	Done  *bool  `query:"done"`
 	Key   string `query:"key,required"`
 }
@@ -406,7 +406,10 @@ func TestSpec_QueryParams(t *testing.T) {
 		t.Errorf("limit description: %q", byName["limit"].Description)
 	}
 	if byName["done"].Description != "" {
-		t.Errorf("untagged done should have no description: %q", byName["done"].Description)
+		t.Errorf(
+			"untagged done should have no description: %q",
+			byName["done"].Description,
+		)
 	}
 	if byName["done"].Schema.Type != "boolean" {
 		t.Errorf("done schema: %+v", byName["done"].Schema)
@@ -865,7 +868,7 @@ func TestSpec_FieldConstraints_EnumIntsTyped(t *testing.T) {
 
 type constrainedBody struct {
 	Email string `json:"email" minLength:"3" maxLength:"254" pattern:"^.+@.+$" desc:"the user's email"`
-	Age   int    `json:"age"                                                   minimum:"0" maximum:"150"`
+	Age   int    `json:"age"                                                                           minimum:"0" maximum:"150"`
 }
 
 func TestSpec_FieldConstraints_OnBodyStructFields(t *testing.T) {

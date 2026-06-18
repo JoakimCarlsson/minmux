@@ -70,10 +70,10 @@ type Showcase struct {
 // ",required" modifier, so the spec marks it required:true (documentation
 // only — the binder does not reject a missing query param).
 type NumberPathParams struct {
-	ID    int32  `path:"id"                              desc:"Numeric resource id"`
-	Trace string `          query:"trace" format:"uuid"  desc:"Optional trace id (uuid) for correlating logs"`
-	Limit int32  `          query:"limit" format:"int64"`
-	Key   string `          query:"key,required"         desc:"Required access key (documented only; not enforced)"`
+	ID    int32  `path:"id" desc:"Numeric resource id"`
+	Trace string `          desc:"Optional trace id (uuid) for correlating logs"       query:"trace"        format:"uuid"`
+	Limit int32  `                                                                     query:"limit"        format:"int64"`
+	Key   string `          desc:"Required access key (documented only; not enforced)" query:"key,required"`
 }
 
 // CreateUserCommand is the request body covering the most common
@@ -141,7 +141,7 @@ func sample() Showcase {
 // PlaceOrderCommand is the POST request body.
 type PlaceOrderCommand struct {
 	SKU      string `json:"sku"      desc:"Product SKU to purchase"`
-	Quantity int    `json:"quantity" minimum:"1" desc:"Units to buy (must be >= 1)"`
+	Quantity int    `json:"quantity" desc:"Units to buy (must be >= 1)" minimum:"1"`
 	Coupon   string `json:"coupon"   desc:"Optional discount code"`
 }
 
@@ -176,10 +176,16 @@ func placeOrder(c *router.Context, p PlaceOrderParams) {
 		errs = append(errs, FieldError{Field: "sku", Message: "required"})
 	}
 	if p.Body.Quantity < 1 {
-		errs = append(errs, FieldError{Field: "quantity", Message: "must be at least 1"})
+		errs = append(
+			errs,
+			FieldError{Field: "quantity", Message: "must be at least 1"},
+		)
 	}
 	if len(errs) > 0 {
-		c.JSON(http.StatusBadRequest, OrderError{Code: "validation_failed", Errors: errs})
+		c.JSON(
+			http.StatusBadRequest,
+			OrderError{Code: "validation_failed", Errors: errs},
+		)
 		return
 	}
 	c.JSON(http.StatusOK, OrderConfirmation{

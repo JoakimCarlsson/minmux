@@ -105,7 +105,10 @@ func TestBinder_QueryRequiredIsDocOnly(t *testing.T) {
 		t.Fatalf("status: %d body=%s", rec.Code, rec.Body)
 	}
 	if got.ID != "abc" {
-		t.Errorf("the ,required modifier must be stripped from the name: %+v", got)
+		t.Errorf(
+			"the ,required modifier must be stripped from the name: %+v",
+			got,
+		)
 	}
 }
 
