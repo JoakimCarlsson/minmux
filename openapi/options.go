@@ -121,6 +121,21 @@ func readMeta(ep *router.Endpoint) *endpointMeta {
 	return &endpointMeta{}
 }
 
+// SecurityOf returns the endpoint's declared security requirements so an
+// enforcement layer can drive runtime auth off the same annotation the spec
+// documents. ok is false when unguarded; ok with empty reqs means explicitly
+// public (NoSecurity); an empty requirement ({}) in reqs marks optional auth.
+func SecurityOf(ep *router.Endpoint) (reqs []SecurityRequirement, ok bool) {
+	m, present := ep.Metadata[metaKey{}].(*endpointMeta)
+	if !present {
+		return nil, false
+	}
+	if len(m.Security) == 0 && !m.SecurityOverride {
+		return nil, false
+	}
+	return m.Security, true
+}
+
 // Summary sets the operation's short one-line description.
 func Summary(s string) router.Option {
 	return func(ep *router.Endpoint) { writeMeta(ep).Summary = s }

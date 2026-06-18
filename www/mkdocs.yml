@@ -49,6 +49,7 @@ nav:
     - Security: security.md
     - Scalar UI: scalar-ui.md
   - Middleware:
+    - Authentication: middleware/auth.md
     - CORS: middleware/cors.md
   - Caching:
     - Output Cache: caching/outputcache.md

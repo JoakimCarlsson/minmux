@@ -7,10 +7,11 @@ declarative — you register schemes on the `Generator`, set a
 document-level default, and override per group or per endpoint with
 options that compose like the rest of the openapi package.
 
-The runtime router does **not** enforce auth. The generated spec
-describes what consumers must satisfy; enforcement is conventional
-middleware (your JWT validator, mTLS terminator, etc.). This keeps the
-router dependency-free and lets you slot in any auth stack.
+The runtime **router** does not enforce auth — it stays dependency-free and
+describes only what consumers must satisfy. Enforcement is opt-in: the
+[`auth`](middleware/auth.md) package reads these same annotations and applies
+them at runtime (you supply one credential verifier per scheme), or you can
+slot in any conventional middleware (your JWT validator, mTLS terminator, etc.).
 
 A runnable end-to-end showcase lives in `examples/security/`. For a
 self-contained authorization server that actually mints tokens through
