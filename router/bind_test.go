@@ -79,6 +79,36 @@ func TestBinder_UrlencodedMissingRequired(t *testing.T) {
 	}
 }
 
+type queryReqParams struct {
+	ID   string `query:"id,required"`
+	Name string `query:"name"`
+}
+
+func TestBinder_QueryRequiredIsDocOnly(t *testing.T) {
+	r := router.New()
+	var got queryReqParams
+	r.Get("/items", func(c *router.Context, p queryReqParams) {
+		got = p
+		c.NoContent()
+	})
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest("GET", "/items", nil))
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("missing ,required query must not be rejected: %d %s",
+			rec.Code, rec.Body)
+	}
+
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest("GET", "/items?id=abc", nil))
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status: %d body=%s", rec.Code, rec.Body)
+	}
+	if got.ID != "abc" {
+		t.Errorf("the ,required modifier must be stripped from the name: %+v", got)
+	}
+}
+
 func TestBinder_Multipart(t *testing.T) {
 	body := &bytes.Buffer{}
 	mw := multipart.NewWriter(body)

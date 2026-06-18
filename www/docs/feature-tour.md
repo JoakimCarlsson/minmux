@@ -113,15 +113,29 @@ r.Get("/users", func(c *router.Context, p ListParams) {
 })
 ```
 
-Pointer types make optional query parameters explicit: `*bool` is `nil`
-when the query string omits the key, set when present. Plain types
-default to their zero value.
+Query and header parameters are **optional by default** — a missing key
+leaves the field at its zero value (or `nil` for a pointer), no error.
+Use a pointer type (`*bool`) when you need to tell "absent" apart from
+the zero value at runtime.
 
-The same pointer-vs-value distinction drives the generated OpenAPI:
-a non-pointer scalar field emits `required: true`, while pointer (and
-slice) fields are optional. This matches form fields and lets the spec
-faithfully describe what the handler actually expects. Header
-parameters (`header:"X-Trace-Id"`) follow the same rule.
+Mark a parameter required for the spec with the `,required` modifier on the
+tag — it sets `required: true` on the generated OpenAPI parameter. Like the
+schema annotations (`minimum`, `enum`, …) and the security model, this is
+**documentation only**: minmux describes the contract, it does not reject a
+missing query/header at runtime. Enforce it in your handler or middleware if
+you need to.
+
+```go
+type ListParams struct {
+    Cursor string `query:"cursor"`          // optional
+    Limit  int    `query:"limit"`           // optional
+    Key    string `query:"key,required"`    // documented required (spec only)
+}
+```
+
+Path parameters (`path:"id"`) are always `required: true` — the route can't
+match without them. Header parameters (`header:"X-Trace-Id,required"`) follow
+the same `,required` rule as query.
 
 To mark a parameter deprecated — useful for legacy query keys you're
 keeping around for back-compat — add `deprecated:"true"` to the tag:

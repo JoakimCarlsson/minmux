@@ -275,12 +275,14 @@ type pathParams struct {
 }
 
 type queryParams struct {
-	Limit int   `query:"limit"`
-	Done  *bool `query:"done"`
+	Limit int    `query:"limit"`
+	Done  *bool  `query:"done"`
+	Key   string `query:"key,required"`
 }
 
 type headerParams struct {
 	TraceID string `header:"X-Trace-Id"`
+	APIKey  string `header:"X-Api-Key,required"`
 }
 
 type bodyParams struct {
@@ -381,8 +383,8 @@ func TestSpec_QueryParams(t *testing.T) {
 	r := router.New()
 	r.Get("/items", noopP[queryParams])
 	op := operation(t, r, "/items", "GET")
-	if len(op.Parameters) != 2 {
-		t.Fatalf("want 2 params, got %d", len(op.Parameters))
+	if len(op.Parameters) != 3 {
+		t.Fatalf("want 3 params, got %d", len(op.Parameters))
 	}
 	byName := map[string]*Parameter{}
 	for _, p := range op.Parameters {
@@ -391,12 +393,14 @@ func TestSpec_QueryParams(t *testing.T) {
 	if byName["limit"].In != "query" {
 		t.Errorf("limit in: %q", byName["limit"].In)
 	}
-	// Non-pointer scalars are required; pointers are optional.
-	if !byName["limit"].Required {
-		t.Errorf("limit (int) should be required")
+	if byName["limit"].Required {
+		t.Errorf("limit should be optional by default")
 	}
 	if byName["done"].Required {
 		t.Errorf("done (*bool) should be optional")
+	}
+	if !byName["key"].Required {
+		t.Errorf("key (query:\"key,required\") should be required")
 	}
 	if byName["done"].Schema.Type != "boolean" {
 		t.Errorf("done schema: %+v", byName["done"].Schema)
@@ -407,13 +411,21 @@ func TestSpec_HeaderParam(t *testing.T) {
 	r := router.New()
 	r.Get("/items", noopP[headerParams])
 	op := operation(t, r, "/items", "GET")
-	if len(op.Parameters) != 1 || op.Parameters[0].Name != "X-Trace-Id" ||
-		op.Parameters[0].In != "header" {
-		t.Errorf("header param: %+v", op.Parameters)
+	if len(op.Parameters) != 2 {
+		t.Fatalf("want 2 header params, got %d", len(op.Parameters))
 	}
-	// string is non-pointer / non-slice -> required.
-	if !op.Parameters[0].Required {
-		t.Errorf("X-Trace-Id (string) should be required")
+	byName := map[string]*Parameter{}
+	for _, p := range op.Parameters {
+		byName[p.Name] = p
+	}
+	if byName["X-Trace-Id"].In != "header" {
+		t.Errorf("X-Trace-Id in: %q", byName["X-Trace-Id"].In)
+	}
+	if byName["X-Trace-Id"].Required {
+		t.Errorf("X-Trace-Id should be optional by default")
+	}
+	if !byName["X-Api-Key"].Required {
+		t.Errorf("X-Api-Key (header:\"X-Api-Key,required\") should be required")
 	}
 }
 

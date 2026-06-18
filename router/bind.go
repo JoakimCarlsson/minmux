@@ -667,18 +667,38 @@ func collectBinders(t reflect.Type, parent []int) ([]fieldBinder, error) {
 	return out, nil
 }
 
+// ParseParamTag splits a path/query/header/form/file tag value into its
+// parameter name and modifiers. The name is the part before the first comma;
+// a "required" modifier after it sets required. Examples:
+//
+//	"id"          → ("id", false)
+//	"id,required" → ("id", true)
+func ParseParamTag(tag string) (name string, required bool) {
+	parts := strings.Split(tag, ",")
+	name = strings.TrimSpace(parts[0])
+	for _, mod := range parts[1:] {
+		if strings.TrimSpace(mod) == "required" {
+			required = true
+		}
+	}
+	return name, required
+}
+
 func classifyField(
 	f reflect.StructField,
 	idx []int,
 ) (fieldBinder, bool, error) {
 	if v, ok := f.Tag.Lookup("path"); ok {
-		return fieldBinder{index: idx, source: srcPath, key: v}, true, nil
+		name, _ := ParseParamTag(v)
+		return fieldBinder{index: idx, source: srcPath, key: name}, true, nil
 	}
 	if v, ok := f.Tag.Lookup("query"); ok {
-		return fieldBinder{index: idx, source: srcQuery, key: v}, true, nil
+		name, _ := ParseParamTag(v)
+		return fieldBinder{index: idx, source: srcQuery, key: name}, true, nil
 	}
 	if v, ok := f.Tag.Lookup("header"); ok {
-		return fieldBinder{index: idx, source: srcHeader, key: v}, true, nil
+		name, _ := ParseParamTag(v)
+		return fieldBinder{index: idx, source: srcHeader, key: name}, true, nil
 	}
 	if v, ok := f.Tag.Lookup("form"); ok {
 		if err := validateFormFieldType(f); err != nil {

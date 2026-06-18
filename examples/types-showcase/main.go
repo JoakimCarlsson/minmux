@@ -65,11 +65,14 @@ type Showcase struct {
 
 // NumberPathParams shows a path int32 alongside a tag-overridden int64
 // query so the generator's auto-format and tag-override paths are both
-// exercised.
+// exercised. Trace/Limit are optional (the default); Key uses the
+// ",required" modifier, so the spec marks it required:true (documentation
+// only — the binder does not reject a missing query param).
 type NumberPathParams struct {
 	ID    int32  `path:"id"`
 	Trace string `          query:"trace" format:"uuid"`
 	Limit int32  `          query:"limit" format:"int64"`
+	Key   string `          query:"key,required"`
 }
 
 // CreateUserCommand is the request body covering the most common
