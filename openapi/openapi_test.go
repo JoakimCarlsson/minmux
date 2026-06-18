@@ -864,7 +864,7 @@ func TestSpec_FieldConstraints_EnumIntsTyped(t *testing.T) {
 }
 
 type constrainedBody struct {
-	Email string `json:"email" minLength:"3" maxLength:"254" pattern:"^.+@.+$"`
+	Email string `json:"email" minLength:"3" maxLength:"254" pattern:"^.+@.+$" desc:"the user's email"`
 	Age   int    `json:"age"                                                   minimum:"0" maximum:"150"`
 }
 
@@ -878,9 +878,15 @@ func TestSpec_FieldConstraints_OnBodyStructFields(t *testing.T) {
 	if email.Pattern != "^.+@.+$" {
 		t.Errorf("email pattern: %q", email.Pattern)
 	}
+	if email.Description != "the user's email" {
+		t.Errorf("email description: %q", email.Description)
+	}
 	age := s.Properties["age"]
 	if age.Maximum == nil || *age.Maximum != 150 {
 		t.Errorf("age maximum: %+v", age.Maximum)
+	}
+	if age.Description != "" {
+		t.Errorf("untagged age should have no description: %q", age.Description)
 	}
 }
 

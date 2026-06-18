@@ -147,6 +147,15 @@ type ListParams struct {
 }
 ```
 
+The same `desc:"..."` tag describes **JSON body and response struct fields** —
+it sets `description` on that property's schema:
+
+```go
+type CreateUser struct {
+    Email string `json:"email" format:"email" desc:"Primary contact email; must be unique"`
+}
+```
+
 To mark a parameter deprecated — useful for legacy query keys you're
 keeping around for back-compat — add `deprecated:"true"` to the tag:
 

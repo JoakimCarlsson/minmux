@@ -208,6 +208,7 @@ type OAuthFlow struct {
 type Schema struct {
 	Ref                  string             `json:"$ref,omitempty"`
 	Type                 string             `json:"type,omitempty"`
+	Description          string             `json:"description,omitempty"`
 	Format               string             `json:"format,omitempty"`
 	Minimum              *float64           `json:"minimum,omitempty"`
 	Maximum              *float64           `json:"maximum,omitempty"`

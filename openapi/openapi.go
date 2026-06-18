@@ -793,6 +793,9 @@ func (b *schemaBuilder) structSchema(t reflect.Type) *Schema {
 			}
 		}
 		props[name] = applyFieldFormat(b.schema(f.Type), f)
+		if d := f.Tag.Get("desc"); d != "" {
+			props[name].Description = d
+		}
 	}
 	return &Schema{Type: "object", Properties: props}
 }

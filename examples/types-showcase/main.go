@@ -7,6 +7,7 @@ import (
 
 	"github.com/joakimcarlsson/minmux/openapi"
 	"github.com/joakimcarlsson/minmux/router"
+	"github.com/joakimcarlsson/minmux/scalar"
 )
 
 // Numbers exercises every Go numeric kind so the generated schema can
@@ -78,8 +79,8 @@ type NumberPathParams struct {
 // CreateUserCommand is the request body covering the most common
 // format-tagged string fields.
 type CreateUserCommand struct {
-	Email    string    `json:"email"     format:"email"`
-	Password string    `json:"password"  format:"password"`
+	Email    string    `json:"email"     format:"email"    desc:"Primary contact email; must be unique"`
+	Password string    `json:"password"  format:"password" desc:"Plaintext password, hashed server-side"`
 	Birthday string    `json:"birthday"  format:"date"`
 	Avatar   string    `json:"avatar"    format:"uri"`
 	JoinedAt time.Time `json:"joined_at"`
@@ -137,6 +138,58 @@ func sample() Showcase {
 	}
 }
 
+// PlaceOrderCommand is the POST request body.
+type PlaceOrderCommand struct {
+	SKU      string `json:"sku"      desc:"Product SKU to purchase"`
+	Quantity int    `json:"quantity" minimum:"1" desc:"Units to buy (must be >= 1)"`
+	Coupon   string `json:"coupon"   desc:"Optional discount code"`
+}
+
+// PlaceOrderParams wraps the body for the typed dispatcher.
+type PlaceOrderParams struct {
+	Body PlaceOrderCommand `body:""`
+}
+
+// OrderConfirmation is the 200 success response.
+type OrderConfirmation struct {
+	OrderID    string `json:"order_id"    desc:"Server-assigned order id"`
+	SKU        string `json:"sku"         desc:"Purchased SKU"`
+	Quantity   int    `json:"quantity"    desc:"Units purchased"`
+	TotalCents int    `json:"total_cents" desc:"Amount charged, in minor units"`
+}
+
+// FieldError is one per-field validation failure.
+type FieldError struct {
+	Field   string `json:"field"   desc:"Offending request field"`
+	Message string `json:"message" desc:"Why the field was rejected"`
+}
+
+// OrderError is the 400 response — a distinct model from the success body.
+type OrderError struct {
+	Code   string       `json:"code"   desc:"Machine-readable error code"`
+	Errors []FieldError `json:"errors" desc:"Per-field validation failures"`
+}
+
+func placeOrder(c *router.Context, p PlaceOrderParams) {
+	var errs []FieldError
+	if p.Body.SKU == "" {
+		errs = append(errs, FieldError{Field: "sku", Message: "required"})
+	}
+	if p.Body.Quantity < 1 {
+		errs = append(errs, FieldError{Field: "quantity", Message: "must be at least 1"})
+	}
+	if len(errs) > 0 {
+		c.JSON(http.StatusBadRequest, OrderError{Code: "validation_failed", Errors: errs})
+		return
+	}
+	c.JSON(http.StatusOK, OrderConfirmation{
+		OrderID:    "ord_0001",
+		SKU:        p.Body.SKU,
+		Quantity:   p.Body.Quantity,
+		TotalCents: p.Body.Quantity * 999,
+	})
+}
+
 func main() {
 	r := router.New()
 
@@ -180,13 +233,36 @@ func main() {
 		),
 	)
 
+	r.Post(
+		"/showcase/orders",
+		placeOrder,
+		openapi.Summary("Place an order"),
+		openapi.Description(
+			"Validates the request body: returns 200 with an "+
+				"OrderConfirmation, or 400 with an OrderError listing the "+
+				"per-field failures. Two different response models on one "+
+				"operation.",
+		),
+		openapi.Tags("Showcase"),
+		openapi.ReturnsBody[OrderConfirmation](
+			http.StatusOK, "Order placed",
+		),
+		openapi.ReturnsBody[OrderError](
+			http.StatusBadRequest, "Validation failed",
+		),
+	)
+
 	gen := openapi.NewGenerator(openapi.Info{
 		Title:       "Types Showcase",
 		Version:     "0.1.0",
 		Description: "Smoke test for openapi schema generation.",
 	})
 	r.HandleFunc(http.MethodGet, "/openapi.json", gen.Handler(r))
+	r.HandleFunc(http.MethodGet, "/docs", scalar.HandlerWith(scalar.Config{
+		SpecURL: "/openapi.json",
+		Title:   "Types Showcase — Reference",
+	}))
 
-	log.Println("listening on :8080")
+	log.Println("listening on :8080 (spec at /openapi.json, docs at /docs)")
 	log.Fatal(http.ListenAndServe(":8080", r))
 }
