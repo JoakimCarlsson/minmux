@@ -69,10 +69,10 @@ type Showcase struct {
 // ",required" modifier, so the spec marks it required:true (documentation
 // only — the binder does not reject a missing query param).
 type NumberPathParams struct {
-	ID    int32  `path:"id"`
-	Trace string `          query:"trace" format:"uuid"`
+	ID    int32  `path:"id"                              desc:"Numeric resource id"`
+	Trace string `          query:"trace" format:"uuid"  desc:"Optional trace id (uuid) for correlating logs"`
 	Limit int32  `          query:"limit" format:"int64"`
-	Key   string `          query:"key,required"`
+	Key   string `          query:"key,required"         desc:"Required access key (documented only; not enforced)"`
 }
 
 // CreateUserCommand is the request body covering the most common

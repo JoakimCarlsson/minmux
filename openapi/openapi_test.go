@@ -275,7 +275,7 @@ type pathParams struct {
 }
 
 type queryParams struct {
-	Limit int    `query:"limit"`
+	Limit int    `query:"limit" desc:"max rows to return"`
 	Done  *bool  `query:"done"`
 	Key   string `query:"key,required"`
 }
@@ -401,6 +401,12 @@ func TestSpec_QueryParams(t *testing.T) {
 	}
 	if !byName["key"].Required {
 		t.Errorf("key (query:\"key,required\") should be required")
+	}
+	if byName["limit"].Description != "max rows to return" {
+		t.Errorf("limit description: %q", byName["limit"].Description)
+	}
+	if byName["done"].Description != "" {
+		t.Errorf("untagged done should have no description: %q", byName["done"].Description)
 	}
 	if byName["done"].Schema.Type != "boolean" {
 		t.Errorf("done schema: %+v", byName["done"].Schema)

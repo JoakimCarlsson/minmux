@@ -137,6 +137,16 @@ Path parameters (`path:"id"`) are always `required: true` — the route can't
 match without them. Header parameters (`header:"X-Trace-Id,required"`) follow
 the same `,required` rule as query.
 
+Describe a parameter for the docs with a `desc:"..."` tag — it sets the
+parameter's `description` in the generated spec (and renders in `/docs`):
+
+```go
+type ListParams struct {
+    Genre  string `query:"genre"  desc:"Filter by genre slug, e.g. mafia"`
+    Limit  int    `query:"limit"  desc:"Page size, 1–100 (default 20)"`
+}
+```
+
 To mark a parameter deprecated — useful for legacy query keys you're
 keeping around for back-compat — add `deprecated:"true"` to the tag:
 

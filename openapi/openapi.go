@@ -368,33 +368,36 @@ func (b *schemaBuilder) buildParams(
 		if v, ok := f.Tag.Lookup("path"); ok {
 			name, _ := router.ParseParamTag(v)
 			params = append(params, &Parameter{
-				Name:       name,
-				In:         "path",
-				Required:   true,
-				Deprecated: fieldDeprecated(f),
-				Schema:     applyFieldFormat(b.schema(f.Type), f),
+				Name:        name,
+				In:          "path",
+				Description: f.Tag.Get("desc"),
+				Required:    true,
+				Deprecated:  fieldDeprecated(f),
+				Schema:      applyFieldFormat(b.schema(f.Type), f),
 			})
 			continue
 		}
 		if v, ok := f.Tag.Lookup("query"); ok {
 			name, required := router.ParseParamTag(v)
 			params = append(params, &Parameter{
-				Name:       name,
-				In:         "query",
-				Required:   required,
-				Deprecated: fieldDeprecated(f),
-				Schema:     applyFieldFormat(b.schema(f.Type), f),
+				Name:        name,
+				In:          "query",
+				Description: f.Tag.Get("desc"),
+				Required:    required,
+				Deprecated:  fieldDeprecated(f),
+				Schema:      applyFieldFormat(b.schema(f.Type), f),
 			})
 			continue
 		}
 		if v, ok := f.Tag.Lookup("header"); ok {
 			name, required := router.ParseParamTag(v)
 			params = append(params, &Parameter{
-				Name:       name,
-				In:         "header",
-				Required:   required,
-				Deprecated: fieldDeprecated(f),
-				Schema:     applyFieldFormat(b.schema(f.Type), f),
+				Name:        name,
+				In:          "header",
+				Description: f.Tag.Get("desc"),
+				Required:    required,
+				Deprecated:  fieldDeprecated(f),
+				Schema:      applyFieldFormat(b.schema(f.Type), f),
 			})
 			continue
 		}

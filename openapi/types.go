@@ -88,11 +88,12 @@ type Operation struct {
 
 // Parameter is a path, query, or header parameter.
 type Parameter struct {
-	Name       string  `json:"name"`
-	In         string  `json:"in"`
-	Required   bool    `json:"required,omitempty"`
-	Deprecated bool    `json:"deprecated,omitempty"`
-	Schema     *Schema `json:"schema"`
+	Name        string  `json:"name"`
+	In          string  `json:"in"`
+	Description string  `json:"description,omitempty"`
+	Required    bool    `json:"required,omitempty"`
+	Deprecated  bool    `json:"deprecated,omitempty"`
+	Schema      *Schema `json:"schema"`
 }
 
 // RequestBody is the typed body of an operation.
