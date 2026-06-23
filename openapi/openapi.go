@@ -86,6 +86,15 @@ type Generator struct {
 	ExternalDocs    *ExternalDocs
 	SecuritySchemes map[string]*SecurityScheme
 	Security        []SecurityRequirement
+	unions          []unionReg
+}
+
+// unionReg describes a tagged (discriminated) union: an interface type whose
+// concrete variants are distinguished by a discriminator property.
+type unionReg struct {
+	iface         reflect.Type
+	discriminator string
+	variants      []reflect.Type
 }
 
 // NewGenerator constructs a Generator.
@@ -93,9 +102,39 @@ func NewGenerator(info Info) *Generator {
 	return &Generator{Info: info}
 }
 
+// RegisterUnion declares that a Go interface is a discriminated union: wherever
+// it appears in a response, the schema is emitted as oneOf of the variant
+// component schemas plus a discriminator on discriminatorProp. iface must be a
+// nil interface pointer (e.g. (*Block)(nil)); variants are zero values of the
+// concrete struct types (e.g. HeroBlock{}). Each variant's discriminator value
+// is read from the `const:"…"` tag on its discriminator field.
+func (g *Generator) RegisterUnion(
+	iface any,
+	discriminatorProp string,
+	variants ...any,
+) {
+	u := unionReg{
+		iface:         reflect.TypeOf(iface).Elem(),
+		discriminator: discriminatorProp,
+	}
+	for _, v := range variants {
+		u.variants = append(u.variants, reflect.TypeOf(v))
+	}
+	g.unions = append(g.unions, u)
+}
+
+func (g *Generator) unionMap() map[reflect.Type]unionReg {
+	m := make(map[reflect.Type]unionReg, len(g.unions))
+	for _, u := range g.unions {
+		m[u.iface] = u
+	}
+	return m
+}
+
 // Spec returns the OpenAPI document for a router.
 func (g *Generator) Spec(r *router.Router) *Document {
 	b := newSchemaBuilder()
+	b.unions = g.unionMap()
 	paths := map[string]*PathItem{}
 	for _, ep := range r.Endpoints() {
 		op := b.buildOperation(ep)
@@ -162,6 +201,7 @@ func setOperation(p *PathItem, method string, op *Operation) {
 // referenced by $ref; everything else is inlined.
 type schemaBuilder struct {
 	components map[string]*Schema
+	unions     map[reflect.Type]unionReg
 }
 
 func newSchemaBuilder() *schemaBuilder {
@@ -725,15 +765,62 @@ func (b *schemaBuilder) schema(t reflect.Type) *Schema {
 	if t == timeType {
 		return &Schema{Type: "string", Format: "date-time"}
 	}
+	if def, ok := b.unions[t]; ok {
+		return b.unionSchema(def)
+	}
 	if t.Kind() == reflect.Struct && t.Name() != "" {
 		name := t.Name()
 		if _, exists := b.components[name]; !exists {
-			b.components[name] = &Schema{} // placeholder for recursive types
+			b.components[name] = &Schema{}
 			b.components[name] = b.structSchema(t)
 		}
 		return &Schema{Ref: "#/components/schemas/" + name}
 	}
 	return b.inline(t)
+}
+
+// unionSchema emits a discriminated union: oneOf of the variant component
+// schemas plus a discriminator mapping each variant's discriminator value (read
+// from its `const:` tag) to that variant's $ref.
+func (b *schemaBuilder) unionSchema(def unionReg) *Schema {
+	s := &Schema{
+		Discriminator: &Discriminator{
+			PropertyName: def.discriminator,
+			Mapping:      map[string]string{},
+		},
+	}
+	for _, vt := range def.variants {
+		ref := b.schema(vt)
+		s.OneOf = append(s.OneOf, ref)
+		if v := discriminatorValue(vt, def.discriminator); v != "" {
+			s.Discriminator.Mapping[v] = ref.Ref
+		}
+	}
+	return s
+}
+
+// discriminatorValue returns the `const:` tag of the struct field whose JSON
+// name is prop, i.e. the literal discriminator value for that variant.
+func discriminatorValue(t reflect.Type, prop string) string {
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		name := f.Name
+		if tag := f.Tag.Get("json"); tag != "" {
+			if c := strings.Index(tag, ","); c >= 0 {
+				tag = tag[:c]
+			}
+			if tag != "" && tag != "-" {
+				name = tag
+			}
+		}
+		if name == prop {
+			return f.Tag.Get("const")
+		}
+	}
+	return ""
 }
 
 func (b *schemaBuilder) inline(t reflect.Type) *Schema {
@@ -811,6 +898,9 @@ func (b *schemaBuilder) structSchema(t reflect.Type) *Schema {
 func applyFieldFormat(s *Schema, f reflect.StructField) *Schema {
 	if v, ok := f.Tag.Lookup("format"); ok && v != "" {
 		s.Format = v
+	}
+	if v, ok := f.Tag.Lookup("const"); ok && v != "" {
+		s.Const = v
 	}
 	applyFieldConstraints(s, f)
 	return s

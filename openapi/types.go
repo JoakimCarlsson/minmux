@@ -222,7 +222,15 @@ type Schema struct {
 	Items                *Schema            `json:"items,omitempty"`
 	AdditionalProperties *Schema            `json:"additionalProperties,omitempty"`
 	OneOf                []*Schema          `json:"oneOf,omitempty"`
+	Discriminator        *Discriminator     `json:"discriminator,omitempty"`
 	Const                any                `json:"const,omitempty"`
 	ContentMediaType     string             `json:"contentMediaType,omitempty"`
 	ContentSchema        *Schema            `json:"contentSchema,omitempty"`
+}
+
+// Discriminator tells a client which oneOf member a value is, by reading a
+// property whose value maps to a schema. Used for tagged (discriminated) unions.
+type Discriminator struct {
+	PropertyName string            `json:"propertyName"`
+	Mapping      map[string]string `json:"mapping,omitempty"`
 }
