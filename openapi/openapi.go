@@ -862,29 +862,70 @@ func zero() *float64 {
 
 func (b *schemaBuilder) structSchema(t reflect.Type) *Schema {
 	props := map[string]*Schema{}
+	var required []string
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		if !f.IsExported() {
 			continue
 		}
-		name := f.Name
-		if tag := f.Tag.Get("json"); tag != "" {
-			if comma := strings.Index(tag, ","); comma >= 0 {
-				tag = tag[:comma]
-			}
-			if tag == "-" {
-				continue
-			}
-			if tag != "" {
-				name = tag
-			}
+		name, ok := jsonFieldName(f)
+		if !ok {
+			continue
 		}
 		props[name] = applyFieldFormat(b.schema(f.Type), f)
 		if d := f.Tag.Get("desc"); d != "" {
 			props[name].Description = d
 		}
+		if fieldRequired(f) {
+			required = append(required, name)
+		}
 	}
-	return &Schema{Type: "object", Properties: props}
+	return &Schema{Type: "object", Properties: props, Required: required}
+}
+
+// jsonFieldName returns the property name a struct field serializes under
+// and whether it is serialized at all. `json:"-"` fields are skipped.
+func jsonFieldName(f reflect.StructField) (string, bool) {
+	tag, ok := f.Tag.Lookup("json")
+	if !ok || tag == "" {
+		return f.Name, true
+	}
+	name, _, _ := strings.Cut(tag, ",")
+	if name == "-" {
+		return "", false
+	}
+	if name == "" {
+		return f.Name, true
+	}
+	return name, true
+}
+
+// fieldRequired reports whether a struct field always appears in the
+// encoded object, which is what JSON Schema's `required` means. It mirrors
+// encoding/json: a pointer field may serialize as null and an omitempty /
+// omitzero field may vanish entirely, so neither is required; everything
+// else always shows up.
+//
+// Without this, every property in a generated schema reads as optional and
+// consumers (notably a generated client) cannot tell `*string` apart from
+// `string` — collapsing the difference between "leave unchanged" and "set
+// to empty" on partial-update payloads.
+func fieldRequired(f reflect.StructField) bool {
+	if f.Type.Kind() == reflect.Ptr {
+		return false
+	}
+	tag, ok := f.Tag.Lookup("json")
+	if !ok {
+		return true
+	}
+	_, opts, _ := strings.Cut(tag, ",")
+	for opt := range strings.SplitSeq(opts, ",") {
+		switch strings.TrimSpace(opt) {
+		case "omitempty", "omitzero":
+			return false
+		}
+	}
+	return true
 }
 
 // applyFieldFormat applies a struct field's `format:"..."` tag and any

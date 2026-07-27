@@ -1,4 +1,4 @@
-.PHONY: install fmt lint test test-integration build modules release-tag release release-warm llms workspace
+.PHONY: install fmt lint test test-integration build generate verify-generate modules release-tag release release-warm llms workspace
 
 GOPATH_FWD := $(subst \,/,$(shell go env GOPATH))
 
@@ -50,6 +50,20 @@ test: workspace
 
 test-integration: workspace
 	cd tests && go test -timeout 300s ./...
+
+generate: workspace
+	@for dir in $(MODULES); do \
+		echo "==> generate $$dir"; \
+		(cd "$$dir" && go generate ./...) || exit 1; \
+	done
+
+verify-generate: generate
+	@if [ -n "$$(git status --porcelain)" ]; then \
+		echo "Generated output is out of date. Run 'make generate' and commit:"; \
+		git --no-pager diff --stat; \
+		exit 1; \
+	fi
+	@echo "generated output is up to date"
 
 modules:
 	@scripts/release.sh modules

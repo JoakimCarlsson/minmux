@@ -32,8 +32,15 @@ sharper, more opinionated API surface and full OpenAPI 3.2 support.
   OAuth2 (including the OAS 3.2 `deviceAuthorization` flow), and
   OpenID Connect, with document-level defaults and per-route overrides
   (`Security`, `SecurityAll`, `OptionalSecurity`, `NoSecurity`).
+- **Typed clients from the same source.** `clientgen` turns the derived
+  spec into a Go client — one method per operation, typed params and
+  results, `*APIError` carrying the decoded error body, and
+  `iter.Seq2[T, error]` for streams. Output is deterministic, so a
+  committed client plus a regenerate-and-diff step turns a breaking API
+  change into a compile error in the caller.
 - **Multi-module.** `router` is the runtime, `openapi` is the spec
-  generator, `scalar` ships the docs UI. Pull only what you need.
+  generator, `clientgen` emits typed clients, `scalar` ships the docs UI.
+  Pull only what you need.
 
 ## Hello world
 
@@ -77,7 +84,9 @@ func main() {
 
 A working multi-endpoint example lives in [`examples/todo`](examples/todo).
 A larger surface — every security scheme, streaming response, and the
-Scalar UI — is in [`examples/scalar-ui`](examples/scalar-ui).
+Scalar UI — is in [`examples/scalar-ui`](examples/scalar-ui). The full
+generated-client loop, from server to committed client to round-trip
+test, is in [`examples/clientgen`](examples/clientgen).
 
 ## Documentation
 
@@ -86,6 +95,7 @@ Scalar UI — is in [`examples/scalar-ui`](examples/scalar-ui).
 - [Security](www/docs/security.md)
 - [Streaming](www/docs/streaming.md)
 - [Scalar UI](www/docs/scalar-ui.md)
+- [Client Generation](www/docs/clientgen.md)
 - [Modules](www/docs/modules.md)
 
 ## Status

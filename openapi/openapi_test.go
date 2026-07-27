@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -249,6 +250,55 @@ func TestSchema_TimeIsNotHoisted(t *testing.T) {
 	}
 	if _, ok := b.components["Time"]; ok {
 		t.Errorf("time.Time should not be in components")
+	}
+}
+
+// Requiredness is what lets a consumer tell `*string` apart from `string`,
+// so it is asserted against every way a Go field can become optional.
+type requiredModel struct {
+	Plain    string  `json:"plain"`
+	Untagged string  //nolint:revive // exercises the no-json-tag path
+	Pointer  *string `json:"pointer"`
+	Empty    string  `json:"empty,omitempty"`
+	Zero     string  `json:"zero,omitzero"`
+	PtrEmpty *string `json:"ptr_empty,omitempty"`
+	Renamed  string  `json:"renamed,omitempty"`
+	Skipped  string  `json:"-"`
+}
+
+func TestSchema_Required(t *testing.T) {
+	b := newSchemaBuilder()
+	b.schema(reflect.TypeOf(requiredModel{}))
+	got := b.components["requiredModel"]
+	if got == nil {
+		t.Fatalf("requiredModel not registered: %v", b.components)
+	}
+
+	want := []string{"plain", "Untagged"}
+	if !slices.Equal(got.Required, want) {
+		t.Errorf("required: want %v, got %v", want, got.Required)
+	}
+	if _, ok := got.Properties["-"]; ok {
+		t.Errorf(`json:"-" field leaked into properties`)
+	}
+}
+
+func TestSchema_RequiredOmittedWhenNoneRequired(t *testing.T) {
+	type allOptional struct {
+		A *string `json:"a"`
+		B string  `json:"b,omitempty"`
+	}
+	b := newSchemaBuilder()
+	got := b.inline(reflect.TypeOf(allOptional{}))
+	if got.Required != nil {
+		t.Errorf("required: want nil, got %v", got.Required)
+	}
+	data, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(data), `"required"`) {
+		t.Errorf("required should be omitted from JSON: %s", data)
 	}
 }
 
@@ -570,10 +620,11 @@ func TestSpec_Info_OmitsZeroFields(t *testing.T) {
 	}
 }
 
+// TestSpec_License_NameRequired checks that a populated License round-trips
+// with omitempty on the URL alternative, and that the empty License{Name:""}
+// still marshals — OAS requires Name, but enforcement is a spec validator's
+// job, not the generator's.
 func TestSpec_License_NameRequired(t *testing.T) {
-	// OAS requires License.Name; verify the empty License{Name:""} still
-	// marshals (we don't enforce — spec validators do), and that a
-	// populated one round-trips with omitempty on the URL alternative.
 	raw, _ := json.Marshal(
 		&License{
 			Name: "Apache-2.0",
@@ -858,7 +909,6 @@ func TestSpec_FieldConstraints_EnumIntsTyped(t *testing.T) {
 		t.Errorf("score enum: got %v want %v", score.Enum, want)
 	}
 
-	// Verify JSON shape — ints must marshal as numbers, not strings.
 	doc := NewGenerator(Info{Title: "T", Version: "1"}).Spec(r)
 	raw, _ := json.Marshal(doc)
 	if !strings.Contains(string(raw), `"enum":[1,2,3,4,5]`) {
@@ -1479,7 +1529,6 @@ func TestSpec_Servers(t *testing.T) {
 		}
 	}
 
-	// Field order: servers must appear between jsonSchemaDialect and paths.
 	dialect := strings.Index(js, `"jsonSchemaDialect"`)
 	servers := strings.Index(js, `"servers"`)
 	pathsIdx := strings.Index(js, `"paths"`)

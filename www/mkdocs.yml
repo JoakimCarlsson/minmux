@@ -48,6 +48,7 @@ nav:
     - Streaming: streaming.md
     - Security: security.md
     - Scalar UI: scalar-ui.md
+    - Client Generation: clientgen.md
   - Middleware:
     - Authentication: middleware/auth.md
     - CORS: middleware/cors.md
