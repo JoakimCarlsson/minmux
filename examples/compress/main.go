@@ -29,6 +29,10 @@
 //	# the handler encoded this one itself; the middleware leaves it alone
 //	curl -sD- -o /dev/null -H 'Accept-Encoding: gzip' localhost:8080/blob
 //
+//	# a structured suffix type: application/problem+json is covered too
+//	curl -sD- -o /dev/null \
+//	    -H 'Accept-Encoding: gzip' localhost:8080/problem
+//
 //	# a stream is not held back waiting to reach the size threshold
 //	curl -N -H 'Accept-Encoding: gzip' localhost:8080/ticks
 //
@@ -111,6 +115,19 @@ func blob(c *router.Context) {
 	)
 }
 
+// problem is an RFC 9457 error body, the media type minmux's own router uses
+// for problem responses. It is compressed by way of the "+json" suffix rather
+// than by being named, which is what keeps the default type list finite.
+func problem(c *router.Context) {
+	c.Bytes(
+		http.StatusUnprocessableEntity,
+		"application/problem+json",
+		[]byte(`{"title":"Unprocessable Entity","status":422,"errors":[`+
+			strings.Repeat(`{"field":"points","detail":"out of range"},`, 40)+
+			`{"field":"points","detail":"out of range"}]}`),
+	)
+}
+
 // ticks streams, and never reaches the size threshold. Flushing settles the
 // response uncompressed rather than leaving the client waiting on a buffer
 // that will not fill.
@@ -189,6 +206,19 @@ func main() {
 		),
 		openapi.Tags("Compression"),
 		openapi.Returns(http.StatusOK, "The blob, gzip-encoded"),
+	)
+
+	r.Get("/problem", problem,
+		openapi.Summary("An RFC 9457 problem body"),
+		openapi.Description(
+			"application/problem+json is compressed by way of the \"+json\" "+
+				"suffix in DefaultTypes rather than by being named. The "+
+				"structured suffix families are open-ended, so matching the "+
+				"suffix is what keeps the default list finite — and it is "+
+				"the media type minmux's own router serves errors as.",
+		),
+		openapi.Tags("Compression"),
+		openapi.Returns(http.StatusUnprocessableEntity, "The problem"),
 	)
 
 	r.Get("/ticks", ticks,

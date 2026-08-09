@@ -9,9 +9,10 @@
 //	r.Use(compress.Default())
 //
 // It negotiates gzip or deflate against Accept-Encoding and compresses only
-// what it can improve: textual and JSON-like media types, bodies of at least
-// DefaultMinSize bytes, and responses the handler has not already encoded
-// itself. To tune any of that:
+// what it can improve: textual and JSON-like media types — including the
+// structured syntax suffixes, so minmux's own application/problem+json error
+// bodies are covered — bodies of at least DefaultMinSize bytes, and responses
+// the handler has not already encoded itself. To tune any of that:
 //
 //	r.Use(compress.New(compress.Options{
 //	    Level:   flate.BestSpeed,

@@ -309,6 +309,59 @@ func TestNew_MinSizeNegativeCompressesEverything(t *testing.T) {
 	}
 }
 
+// Structured syntax suffixes (RFC 6839) are a whole family that cannot be
+// enumerated, and one member is what minmux's own router serves errors as.
+func TestDefault_CompressesStructuredSuffixes(t *testing.T) {
+	for _, mediaType := range []string{
+		"application/problem+json",
+		"application/ld+json",
+		"application/vnd.api+json",
+		"application/geo+json",
+		"application/manifest+json",
+		"image/svg+xml",
+		"application/xhtml+xml",
+		"application/atom+xml",
+	} {
+		rec := do(t, Default(), "gzip", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", mediaType)
+			_, _ = io.WriteString(w, body)
+		})
+		if got := rec.Header().Get("Content-Encoding"); got != EncodingGzip {
+			t.Errorf("%s: Content-Encoding = %q, want gzip", mediaType, got)
+		}
+	}
+}
+
+// A suffix is not a licence to compress anything carrying a "+": the archive
+// suffixes name payloads that are already compressed.
+func TestDefault_SkipsCompressedSuffixes(t *testing.T) {
+	for _, mediaType := range []string{
+		"application/epub+zip",
+		"application/vnd.oasis.opendocument.text",
+	} {
+		rec := do(t, Default(), "gzip", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", mediaType)
+			_, _ = io.WriteString(w, body)
+		})
+		if got := rec.Header().Get("Content-Encoding"); got != "" {
+			t.Errorf("%s: Content-Encoding = %q, want none", mediaType, got)
+		}
+	}
+}
+
+// The suffix rule belongs to DefaultTypes. A Types list that did not ask for
+// it does not get it.
+func TestTypes_SuffixIsNotImplied(t *testing.T) {
+	mw := New(Options{Types: []string{"application/json"}})
+	rec := do(t, mw, "gzip", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/problem+json")
+		_, _ = io.WriteString(w, body)
+	})
+	if got := rec.Header().Get("Content-Encoding"); got != "" {
+		t.Fatalf("explicit Types: Content-Encoding = %q, want none", got)
+	}
+}
+
 func TestNew_Types(t *testing.T) {
 	mw := New(Options{Types: []string{"text/csv"}})
 

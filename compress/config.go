@@ -11,20 +11,24 @@ import (
 const DefaultMinSize = 1024
 
 // DefaultTypes is the set of content types compressed when Options.Types is
-// empty. Each entry is matched as a prefix of the response's media type, so
-// "text/" covers every textual subtype. Anything already compressed — images,
-// video, archives, and the pre-compressed blobs an application serves itself —
-// is deliberately absent: running it through a second compressor spends CPU to
-// add bytes.
+// empty. Anything already compressed — images, video, archives, and the
+// pre-compressed blobs an application serves itself — is deliberately absent:
+// running it through a second compressor spends CPU to add bytes.
+//
+// An entry beginning with "+" matches a structured syntax suffix (RFC 6839)
+// rather than a prefix, so "+json" covers application/problem+json,
+// application/ld+json, application/vnd.api+json and every other name ending
+// that way. Without it each would have to be listed, and the one that matters
+// most here is minmux's own: router serves its RFC 9457 error bodies as
+// application/problem+json.
 var DefaultTypes = []string{
 	"application/json",
 	"application/javascript",
-	"application/manifest+json",
 	"application/wasm",
-	"application/xhtml+xml",
 	"application/xml",
-	"image/svg+xml",
 	"text/",
+	"+json",
+	"+xml",
 }
 
 // Options configures the compression middleware.
@@ -41,8 +45,10 @@ type Options struct {
 	// finishes, so this is also the middleware's per-request buffer ceiling.
 	MinSize int
 
-	// Types is the set of content types to compress, matched as prefixes of
-	// the response media type. Empty selects DefaultTypes.
+	// Types is the set of content types to compress. An entry is matched as
+	// a prefix of the response media type, except one beginning with "+",
+	// which matches a structured syntax suffix: "+json" covers
+	// application/problem+json and its kind. Empty selects DefaultTypes.
 	Types []string
 
 	// Skip decides per-request whether to leave the response alone. Useful
