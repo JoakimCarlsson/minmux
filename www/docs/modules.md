@@ -29,6 +29,7 @@ You install only the modules you use.
 
 | Module | Purpose |
 |---|---|
+| `compress` | Response compression middleware compatible with any `http.Handler`. Negotiates gzip or deflate against `Accept-Encoding` and compresses only what it improves: configured media types, bodies over a minimum size, and responses the handler has not already encoded. Zero external dependencies. See [Compression](middleware/compress.md). |
 | `cors` | CORS middleware compatible with any `http.Handler`. Zero external dependencies. See [CORS](middleware/cors.md). |
 
 ## Caching
