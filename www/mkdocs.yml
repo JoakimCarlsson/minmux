@@ -51,6 +51,7 @@ nav:
     - Client Generation: clientgen.md
   - Middleware:
     - Authentication: middleware/auth.md
+    - Compression: middleware/compress.md
     - CORS: middleware/cors.md
   - Caching:
     - Output Cache: caching/outputcache.md

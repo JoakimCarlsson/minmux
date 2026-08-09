@@ -5,6 +5,7 @@ use (
 	./openapi
 	./clientgen
 	./auth
+	./compress
 	./cors
 	./outputcache
 	./outputcache/inmemory
