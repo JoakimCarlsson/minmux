@@ -94,7 +94,10 @@ func TestServer_TransparentToDefaultClient(t *testing.T) {
 		t.Fatalf("body mismatch: %d bytes back, want %d", len(out), len(body))
 	}
 	if got := res.Header.Get("Content-Encoding"); got != "" {
-		t.Fatalf("Content-Encoding = %q, want it consumed by the transport", got)
+		t.Fatalf(
+			"Content-Encoding = %q, want it consumed by the transport",
+			got,
+		)
 	}
 	if v := res.Header.Get("Vary"); !strings.Contains(v, "Accept-Encoding") {
 		t.Fatalf("Vary = %q, want it to include Accept-Encoding", v)

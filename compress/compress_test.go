@@ -75,11 +75,16 @@ func TestDefault_CompressesLargeJSON(t *testing.T) {
 }
 
 func TestDefault_SetsVaryAndDropsContentLength(t *testing.T) {
-	rec := do(t, Default(), "gzip", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
-		_, _ = io.WriteString(w, body)
-	})
+	rec := do(
+		t,
+		Default(),
+		"gzip",
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+			_, _ = io.WriteString(w, body)
+		},
+	)
 
 	if v := rec.Header().Get("Vary"); !strings.Contains(v, "Accept-Encoding") {
 		t.Fatalf("Vary = %q, want it to include Accept-Encoding", v)
@@ -101,11 +106,16 @@ func TestDefault_LeavesSmallBodyAlone(t *testing.T) {
 }
 
 func TestDefault_PreservesStatusOnSmallBody(t *testing.T) {
-	rec := do(t, Default(), "gzip", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusServiceUnavailable)
-		_, _ = io.WriteString(w, `{"error":"unavailable"}`)
-	})
+	rec := do(
+		t,
+		Default(),
+		"gzip",
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = io.WriteString(w, `{"error":"unavailable"}`)
+		},
+	)
 
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503", rec.Code)
@@ -116,11 +126,16 @@ func TestDefault_PreservesStatusOnSmallBody(t *testing.T) {
 }
 
 func TestDefault_PreservesStatusOnCompressedBody(t *testing.T) {
-	rec := do(t, Default(), "gzip", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		_, _ = io.WriteString(w, body)
-	})
+	rec := do(
+		t,
+		Default(),
+		"gzip",
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			_, _ = io.WriteString(w, body)
+		},
+	)
 
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201", rec.Code)
@@ -166,11 +181,16 @@ func TestDefault_VariesEvenWhenNotCompressed(t *testing.T) {
 // The handler writes headers and then a body, so the wrapper's decision point
 // is reached twice. It must settle once.
 func TestDefault_VaryNotDuplicated(t *testing.T) {
-	rec := do(t, Default(), "gzip", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = io.WriteString(w, body)
-	})
+	rec := do(
+		t,
+		Default(),
+		"gzip",
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = io.WriteString(w, body)
+		},
+	)
 
 	if got := rec.Header().Values("Vary"); len(got) != 1 {
 		t.Fatalf("Vary = %v, want exactly one entry", got)
@@ -179,10 +199,15 @@ func TestDefault_VaryNotDuplicated(t *testing.T) {
 
 // An uncompressible response must not collect a Vary it does not need.
 func TestDefault_NoVaryOnUncompressibleType(t *testing.T) {
-	rec := do(t, Default(), "gzip", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "image/png")
-		_, _ = io.WriteString(w, body)
-	})
+	rec := do(
+		t,
+		Default(),
+		"gzip",
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "image/png")
+			_, _ = io.WriteString(w, body)
+		},
+	)
 
 	if got := rec.Header().Get("Vary"); got != "" {
 		t.Fatalf("Vary = %q, want none", got)
@@ -190,11 +215,16 @@ func TestDefault_NoVaryOnUncompressibleType(t *testing.T) {
 }
 
 func TestDefault_SkipsAlreadyEncodedBody(t *testing.T) {
-	rec := do(t, Default(), "gzip", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Content-Encoding", "gzip")
-		_, _ = io.WriteString(w, body)
-	})
+	rec := do(
+		t,
+		Default(),
+		"gzip",
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Header().Set("Content-Encoding", "gzip")
+			_, _ = io.WriteString(w, body)
+		},
+	)
 
 	if rec.Body.String() != body {
 		t.Fatalf("pre-encoded body was re-encoded: %d bytes", rec.Body.Len())
@@ -202,10 +232,15 @@ func TestDefault_SkipsAlreadyEncodedBody(t *testing.T) {
 }
 
 func TestDefault_SkipsUncompressibleType(t *testing.T) {
-	rec := do(t, Default(), "gzip", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "image/png")
-		_, _ = io.WriteString(w, body)
-	})
+	rec := do(
+		t,
+		Default(),
+		"gzip",
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "image/png")
+			_, _ = io.WriteString(w, body)
+		},
+	)
 
 	if got := rec.Header().Get("Content-Encoding"); got != "" {
 		t.Fatalf("Content-Encoding = %q, want none", got)
@@ -216,12 +251,18 @@ func TestDefault_SkipsUncompressibleType(t *testing.T) {
 }
 
 func TestDefault_SkipsPartialContent(t *testing.T) {
-	rec := do(t, Default(), "gzip", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
-		w.Header().Set("Content-Range", "bytes 0-99/"+strconv.Itoa(len(body)))
-		w.WriteHeader(http.StatusPartialContent)
-		_, _ = io.WriteString(w, body)
-	})
+	rec := do(
+		t,
+		Default(),
+		"gzip",
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			w.Header().
+				Set("Content-Range", "bytes 0-99/"+strconv.Itoa(len(body)))
+			w.WriteHeader(http.StatusPartialContent)
+			_, _ = io.WriteString(w, body)
+		},
+	)
 
 	if got := rec.Header().Get("Content-Encoding"); got != "" {
 		t.Fatalf("Content-Encoding = %q, want none", got)
@@ -232,10 +273,15 @@ func TestDefault_SkipsPartialContent(t *testing.T) {
 }
 
 func TestDefault_HonoursMediaTypeParameters(t *testing.T) {
-	rec := do(t, Default(), "gzip", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = io.WriteString(w, body)
-	})
+	rec := do(
+		t,
+		Default(),
+		"gzip",
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = io.WriteString(w, body)
+		},
+	)
 
 	if got := rec.Header().Get("Content-Encoding"); got != EncodingGzip {
 		t.Fatalf("Content-Encoding = %q, want gzip", got)
@@ -247,10 +293,15 @@ func TestDefault_EmptyBodyStatuses(t *testing.T) {
 		http.StatusNoContent,
 		http.StatusNotModified,
 	} {
-		rec := do(t, Default(), "gzip", func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(status)
-		})
+		rec := do(
+			t,
+			Default(),
+			"gzip",
+			func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(status)
+			},
+		)
 		if rec.Code != status {
 			t.Fatalf("status = %d, want %d", rec.Code, status)
 		}
@@ -272,12 +323,17 @@ func TestDefault_HandlerWritesNothing(t *testing.T) {
 }
 
 func TestDefault_FlushSendsStreamUncompressed(t *testing.T) {
-	rec := do(t, Default(), "gzip", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/event-stream")
-		_, _ = io.WriteString(w, "data: one\n\n")
-		w.(http.Flusher).Flush()
-		_, _ = io.WriteString(w, "data: two\n\n")
-	})
+	rec := do(
+		t,
+		Default(),
+		"gzip",
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = io.WriteString(w, "data: one\n\n")
+			w.(http.Flusher).Flush()
+			_, _ = io.WriteString(w, "data: two\n\n")
+		},
+	)
 
 	if got := rec.Header().Get("Content-Encoding"); got != "" {
 		t.Fatalf("Content-Encoding = %q, want none", got)
@@ -322,10 +378,15 @@ func TestDefault_CompressesStructuredSuffixes(t *testing.T) {
 		"application/xhtml+xml",
 		"application/atom+xml",
 	} {
-		rec := do(t, Default(), "gzip", func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", mediaType)
-			_, _ = io.WriteString(w, body)
-		})
+		rec := do(
+			t,
+			Default(),
+			"gzip",
+			func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", mediaType)
+				_, _ = io.WriteString(w, body)
+			},
+		)
 		if got := rec.Header().Get("Content-Encoding"); got != EncodingGzip {
 			t.Errorf("%s: Content-Encoding = %q, want gzip", mediaType, got)
 		}
@@ -339,10 +400,15 @@ func TestDefault_SkipsCompressedSuffixes(t *testing.T) {
 		"application/epub+zip",
 		"application/vnd.oasis.opendocument.text",
 	} {
-		rec := do(t, Default(), "gzip", func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", mediaType)
-			_, _ = io.WriteString(w, body)
-		})
+		rec := do(
+			t,
+			Default(),
+			"gzip",
+			func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", mediaType)
+				_, _ = io.WriteString(w, body)
+			},
+		)
 		if got := rec.Header().Get("Content-Encoding"); got != "" {
 			t.Errorf("%s: Content-Encoding = %q, want none", mediaType, got)
 		}
