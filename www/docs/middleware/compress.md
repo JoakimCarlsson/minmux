@@ -50,14 +50,28 @@ r.Use(compress.New(compress.Options{
 |---|---|
 | `Level` | Compression level, from `flate.BestSpeed` to `flate.BestCompression`. Zero selects `flate.DefaultCompression`. A level outside the range flate accepts is replaced by the default rather than rejected. |
 | `MinSize` | Body bytes a response must reach before it is compressed. Zero selects `DefaultMinSize` (1024). Negative compresses every eligible response regardless of size. |
-| `Types` | Content types to compress, matched as **prefixes** of the response media type — `"text/"` covers every textual subtype. Empty selects `DefaultTypes`. |
+| `Types` | Content types to compress, matched as **prefixes** of the response media type — `"text/"` covers every textual subtype. An entry beginning with `+` instead matches a **structured syntax suffix** ([RFC 6839](https://www.rfc-editor.org/rfc/rfc6839)) — `"+json"` covers `application/problem+json` and its kind. Empty selects `DefaultTypes`. |
 | `Skip` | `func(*http.Request) bool`. Returns true to leave the response alone. For paths that stream, that serve pre-compressed payloads, or that a proxy already handles. |
 
 `DefaultTypes` is `application/json`, `application/javascript`,
-`application/manifest+json`, `application/wasm`, `application/xhtml+xml`,
-`application/xml`, `image/svg+xml`, and `text/`. Already-compressed
-formats — images, video, archives — are deliberately absent: running
-them through a second compressor spends CPU to add bytes.
+`application/wasm`, `application/xml`, `text/`, `+json` and `+xml`.
+Already-compressed formats — images, video, archives — are deliberately
+absent: running them through a second compressor spends CPU to add
+bytes.
+
+The two suffix entries are what make the list finite. The `+json`
+family alone runs to `application/problem+json`, `ld+json`, `hal+json`,
+`vnd.api+json`, `geo+json`, `manifest+json` and a long tail of vendor
+types; `+xml` likewise covers `xhtml+xml`, `svg+xml` and `atom+xml`.
+Matching the suffix catches all of them, including the one minmux
+itself serves: `router` returns its [RFC
+9457](https://www.rfc-editor.org/rfc/rfc9457) error bodies as
+`application/problem+json`.
+
+Note that a `+` in a media type doesn't imply text — `application/epub+zip`
+names an already-compressed payload, and neither default suffix matches it.
+The suffix rule belongs to `DefaultTypes`; a `Types` list you supply
+yourself gets only the entries you put in it.
 
 ## What is left alone
 

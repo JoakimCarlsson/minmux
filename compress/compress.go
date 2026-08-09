@@ -115,6 +115,8 @@ func parseAcceptEncoding(header string) map[string]float64 {
 }
 
 // compressible reports whether a media type is one of the configured types.
+// An entry beginning with "+" matches a structured syntax suffix; every other
+// entry matches a prefix.
 func compressible(contentType string, types []string) bool {
 	media, _, _ := strings.Cut(contentType, ";")
 	media = strings.ToLower(strings.TrimSpace(media))
@@ -122,6 +124,12 @@ func compressible(contentType string, types []string) bool {
 		return false
 	}
 	for _, t := range types {
+		if strings.HasPrefix(t, "+") {
+			if strings.HasSuffix(media, t) {
+				return true
+			}
+			continue
+		}
 		if strings.HasPrefix(media, t) {
 			return true
 		}
