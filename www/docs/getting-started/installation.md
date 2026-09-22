@@ -1,6 +1,6 @@
 # Installation
 
-minmux requires Go 1.25 or later.
+minmux requires Go 1.26 or later.
 
 ## Core router
 
