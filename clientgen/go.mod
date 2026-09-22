@@ -3,8 +3,8 @@ module github.com/joakimcarlsson/minmux/clientgen
 go 1.26.0
 
 require (
-	github.com/joakimcarlsson/minmux/openapi v0.0.0-00010101000000-000000000000
-	github.com/joakimcarlsson/minmux/router v0.0.0-00010101000000-000000000000
+	github.com/joakimcarlsson/minmux/openapi v0.1.0
+	github.com/joakimcarlsson/minmux/router v0.1.0
 )
 
 replace (

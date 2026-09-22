@@ -100,8 +100,84 @@ test, is in [`examples/clientgen`](examples/clientgen).
 
 ## Status
 
-Early development. The API surface is still settling; expect breaking
-changes until a v0.1.0 tag.
+The first public release is v0.1.0. The API surface is still settling, so
+minor releases may include breaking changes until v1.0.0.
+
+## Versioning
+
+Each module is versioned independently with a path-prefixed git tag. The tag
+prefix must match the module directory exactly so the Go module system can
+resolve it.
+
+| Module | Tag format | Example |
+|--------|------------|---------|
+| router | `router/vX.Y.Z` | `router/v0.1.0` |
+| openapi | `openapi/vX.Y.Z` | `openapi/v0.1.0` |
+| outputcache/inmemory | `outputcache/inmemory/vX.Y.Z` | `outputcache/inmemory/v0.1.0` |
+
+All modules follow [semantic versioning](https://semver.org).
+
+## Release process
+
+Releases follow the same model as the AI repository: CI on `main` is the
+safety net, module tags drive `go get` resolution, and dated GitHub Releases
+collect the module releases into a changelog.
+
+### 1. Ensure main is green
+
+CI must pass on the latest commit before tagging.
+
+### 2. Sync internal dependencies
+
+When a shared module changes, update the version required by each module that
+publishes it to users. The helper detects and fixes requirements that lag the
+latest published module tag:
+
+```bash
+scripts/sync-deps.sh --check
+scripts/sync-deps.sh
+```
+
+Commit and merge any resulting `go.mod` and `go.sum` changes before tagging
+the affected consumers. Skip this step for an isolated change that cannot
+affect another module's public build.
+
+### 3. Tag changed modules
+
+```bash
+# List every workspace module
+scripts/release.sh modules
+
+# Create a local tag for inspection
+scripts/release.sh tag -m router -v v0.1.0
+
+# Create and push the tag
+make release-tag MODULE=router VERSION=v0.1.0
+```
+
+The script verifies that the module exists, the tag uses semantic versioning,
+the working tree is clean, and the release is made from `main`.
+
+### 4. Warm the Go module proxy
+
+```bash
+scripts/release.sh warm -t router/v0.1.0
+```
+
+Run this for every new module tag so it is immediately available through
+`go get`.
+
+### 5. Create a dated GitHub Release
+
+```bash
+# Preview the release notes
+scripts/release.sh release
+
+# Publish release-YYYY-MM-DD and its GitHub Release
+make release PUBLISH=1
+```
+
+The release lists every module tag created since the previous dated release.
 
 ## License
 

@@ -43,3 +43,51 @@ jobs:
               go test -short ./...
             )
           done <<< "$modules"
+
+  deps-drift:
+    name: Intra-repo version drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Check require lines match latest module tags
+        run: scripts/sync-deps.sh --check
+
+  release-tag:
+    name: Validate release tag
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') && !startsWith(github.ref, 'refs/tags/release-')
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.x'
+          check-latest: true
+          cache-dependency-path: |
+            **/go.mod
+            **/go.sum
+
+      - name: Verify the tagged module builds and tests cleanly
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF#refs/tags/}"
+          mod_dir="${tag%/v*}"
+          if [ "$mod_dir" = "$tag" ]; then
+            echo "::error::Tag $tag is not in <module>/vX.Y.Z form"
+            exit 1
+          fi
+          if [ ! -f "$mod_dir/go.mod" ]; then
+            echo "::error::Tag $tag points at $mod_dir but $mod_dir/go.mod is missing"
+            exit 1
+          fi
+          go work init
+          while IFS= read -r module; do
+            go work use "./${module}"
+          done < <(scripts/release.sh modules)
+          (cd "$mod_dir" && go build ./... && go test -short ./...)
