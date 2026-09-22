@@ -21,10 +21,10 @@ esac
 
 latest_version() {
 	local dir="$1"
-	git tag -l "${dir}/v*" |
+	{ git tag -l "${dir}/v*" |
 		grep -E "^${dir}/v[0-9]+\.[0-9]+\.[0-9]+$" |
 		sed "s|^${dir}/||" |
-		sort -V | tail -n1
+		sort -V | tail -n1; } || true
 }
 
 internal_requires() {
