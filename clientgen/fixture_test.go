@@ -1,6 +1,7 @@
 package clientgen
 
 import (
+	"encoding/json"
 	"io"
 	"iter"
 	"mime/multipart"
@@ -57,6 +58,15 @@ type DownloadParams struct {
 	Path string `path:"path"`
 }
 
+type WebhookEvent struct {
+	ID      string          `json:"id"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+type WebhookParams struct {
+	Body []byte `body:"" contentType:"application/json"`
+}
+
 type Progress struct {
 	Percent int    `json:"percent"`
 	Stage   string `json:"stage"`
@@ -70,11 +80,12 @@ func updateTodo(_ *router.Context, _ UpdateTodoParams) {}
 func deleteTodo(_ *router.Context, _ GetTodoParams)    {}
 func upload(_ *router.Context, _ UploadParams)         {}
 func download(_ *router.Context, _ DownloadParams)     {}
+func webhook(_ *router.Context, _ WebhookParams)       {}
 
 // fixtureRouter builds a router exercising the shapes the generator has to
 // cover: every parameter location, a JSON body, a partial-update body of
-// pointers, a multipart upload, a wildcard path, and each streaming
-// response kind.
+// pointers, a multipart upload, a raw body declared with AcceptsBody, a
+// wildcard path, and each streaming response kind.
 func fixtureRouter() *router.Router {
 	r := router.New()
 	todos := r.Group("/api/v1/todos", openapi.Tags("Todos"))
@@ -107,6 +118,11 @@ func fixtureRouter() *router.Router {
 	r.Post("/uploads", upload,
 		openapi.Summary("Upload a file"),
 		openapi.ReturnsBody[Todo](http.StatusCreated, "Uploaded"),
+	)
+	r.Post("/webhooks", webhook,
+		openapi.Summary("Receive a webhook"),
+		openapi.AcceptsBody[WebhookEvent](),
+		openapi.Returns(http.StatusNoContent, "Received"),
 	)
 	r.Get("/files/{path...}", download,
 		openapi.Summary("Download a file"),

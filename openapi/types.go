@@ -98,8 +98,9 @@ type Parameter struct {
 
 // RequestBody is the typed body of an operation.
 type RequestBody struct {
-	Required bool                  `json:"required,omitempty"`
-	Content  map[string]*MediaType `json:"content"`
+	Description string                `json:"description,omitempty"`
+	Required    bool                  `json:"required,omitempty"`
+	Content     map[string]*MediaType `json:"content"`
 }
 
 // Response is a single status-code response variant.

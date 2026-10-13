@@ -212,6 +212,38 @@ func TestRender_PathAndParameterEncoding(t *testing.T) {
 	}
 }
 
+// TestRender_AcceptsBodyTypesARawBody checks that a raw body declared with
+// AcceptsBody is sent as the declared type, and that its json.RawMessage
+// field survives as json.RawMessage.
+func TestRender_AcceptsBodyTypesARawBody(t *testing.T) {
+	files := render(t, "fixtureclient")
+	ops := fileNamed(t, files, "operations.gen.go")
+	types := fileNamed(t, files, "types.gen.go")
+
+	params := "type PostWebhooksParams struct {\n" +
+		"\t// Body is the JSON request body.\n\tBody WebhookEvent\n}"
+	if !strings.Contains(ops, params) {
+		t.Errorf("missing %q\n%s", params, ops)
+	}
+	_, method, ok := strings.Cut(ops, "func (c *Client) PostWebhooks(")
+	if !ok {
+		t.Fatalf("no PostWebhooks method\n%s", ops)
+	}
+	method, _, _ = strings.Cut(method, "\n}\n")
+	for _, want := range []string{
+		"body, err := jsonBody(p.Body)",
+		`contentType: "application/json",`,
+	} {
+		if !strings.Contains(method, want) {
+			t.Errorf("PostWebhooks missing %q\n%s", want, method)
+		}
+	}
+	want := "Payload json.RawMessage `json:\"payload\"`"
+	if !strings.Contains(types, want) {
+		t.Errorf("WebhookEvent missing %q\n%s", want, types)
+	}
+}
+
 func TestGenerate_WritesFilesAndPrunesStale(t *testing.T) {
 	dir := t.TempDir()
 	stale := filepath.Join(dir, "leftover.gen.go")

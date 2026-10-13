@@ -539,7 +539,26 @@ r.Post("/raw", func(c *router.Context, p RawUploadParams) {
 
 The generated requestBody emits one content-type entry per value in the
 `contentType` tag, defaulting to `application/octet-stream` when the tag
-is absent.
+is absent. The body field's `desc:` tag becomes the requestBody's
+description.
+
+A raw body is documented as a binary string. When the payload has a
+known shape but the handler needs the bytes as sent, such as to verify a
+signature or store the body verbatim, declare its type with
+`openapi.AcceptsBody[T]`:
+
+```go
+type WebhookParams struct {
+    Body []byte `body:"" contentType:"application/json" desc:"The event."`
+}
+
+r.Post("/webhooks", receiveWebhook,
+    openapi.AcceptsBody[WebhookEvent](),
+)
+```
+
+Each content type is then documented with `T`'s schema, and the handler
+still receives the raw bytes.
 
 `form`/`file` fields are required by default; pointer and slice fields
 are optional. Missing required fields return a 400 ProblemDetails.

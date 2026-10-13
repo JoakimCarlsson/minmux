@@ -21,6 +21,7 @@ type endpointMeta struct {
 	ExternalDocs     *ExternalDocs
 	Tags             []string
 	Responses        []ResponseDecl
+	RequestBodyType  reflect.Type
 	Security         []SecurityRequirement
 	SecurityOverride bool
 }
@@ -196,6 +197,18 @@ func Tags(t ...string) router.Option {
 	return func(ep *router.Endpoint) {
 		m := writeMeta(ep)
 		m.Tags = append(m.Tags, t...)
+	}
+}
+
+// AcceptsBody declares the request body as T. T's schema replaces the
+// schema of every content type the body is documented under, so a route
+// that reads its body raw ([]byte or io.Reader) can still document the
+// payload's shape. A route with no body field is documented as taking T
+// as application/json.
+func AcceptsBody[T any]() router.Option {
+	bodyType := reflect.TypeFor[T]()
+	return func(ep *router.Endpoint) {
+		writeMeta(ep).RequestBodyType = bodyType
 	}
 }
 

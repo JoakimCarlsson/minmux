@@ -17,6 +17,7 @@ var (
 	timeType          = reflect.TypeOf(time.Time{})
 	readerType        = reflect.TypeFor[io.Reader]()
 	bytesType         = reflect.TypeFor[[]byte]()
+	rawMessageType    = reflect.TypeFor[json.RawMessage]()
 	fileHeaderPtrType = reflect.TypeFor[*multipart.FileHeader]()
 	fileHeaderSlcType = reflect.TypeFor[[]*multipart.FileHeader]()
 	errorType         = reflect.TypeFor[error]()
@@ -226,6 +227,12 @@ func (b *schemaBuilder) buildOperation(ep *router.Endpoint) *Operation {
 	}
 	if ep.ParamType != nil {
 		op.Parameters, op.RequestBody = b.buildParams(ep.ParamType)
+	}
+	if m.RequestBodyType != nil {
+		op.RequestBody = b.acceptedRequestBody(
+			m.RequestBodyType,
+			op.RequestBody,
+		)
 	}
 	op.Parameters = fillMissingPathParams(ep.Path, op.Parameters)
 	return op
@@ -493,7 +500,27 @@ func (b *schemaBuilder) buildRequestBody(
 	if bodyField == nil {
 		return nil
 	}
-	return b.bodyRequestBody(*bodyField)
+	rb := b.bodyRequestBody(*bodyField)
+	rb.Description = bodyField.Tag.Get("desc")
+	return rb
+}
+
+// acceptedRequestBody documents rb's content as t, as declared by
+// AcceptsBody. A nil rb becomes a required application/json body.
+func (b *schemaBuilder) acceptedRequestBody(
+	t reflect.Type,
+	rb *RequestBody,
+) *RequestBody {
+	if rb == nil {
+		rb = &RequestBody{
+			Required: true,
+			Content:  map[string]*MediaType{"application/json": {}},
+		}
+	}
+	for ct := range rb.Content {
+		rb.Content[ct] = &MediaType{Schema: b.schema(t)}
+	}
+	return rb
 }
 
 func formRequestBody(contentType string, props []formProperty) *RequestBody {
@@ -764,6 +791,9 @@ func (b *schemaBuilder) schema(t reflect.Type) *Schema {
 	}
 	if t == timeType {
 		return &Schema{Type: "string", Format: "date-time"}
+	}
+	if t == rawMessageType {
+		return &Schema{}
 	}
 	if def, ok := b.unions[t]; ok {
 		return b.unionSchema(def)
