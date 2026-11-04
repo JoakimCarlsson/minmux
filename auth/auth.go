@@ -25,10 +25,25 @@ var ErrNoCredential = errors.New("auth: no credential")
 // ErrForbidden signals an authenticated but unauthorized caller (403).
 var ErrForbidden = errors.New("auth: forbidden")
 
+// The problem types the Authenticator sets on the default problems it writes,
+// one per failure outcome.
+const (
+	// TypeUnauthenticated is the type of the 401 for a route that requires a
+	// credential the request did not carry.
+	TypeUnauthenticated = "unauthenticated"
+	// TypeInvalidCredentials is the type of the 401 for a credential that is
+	// present but invalid, or for a scheme with no registered verifier.
+	TypeInvalidCredentials = "invalid_credentials"
+	// TypeForbidden is the type of the 403 for a valid credential without the
+	// required permission.
+	TypeForbidden = "forbidden"
+)
+
 // Authenticator holds the registered verifiers and enforces route security.
 type Authenticator struct {
 	router    *router.Router
 	verifiers map[string]Verifier
+	problem   func(*http.Request, *router.ProblemDetails) *router.ProblemDetails
 }
 
 // New constructs an Authenticator bound to the router whose endpoint metadata
@@ -36,7 +51,11 @@ type Authenticator struct {
 func New(r *router.Router, cfg Config) *Authenticator {
 	verifiers := make(map[string]Verifier, len(cfg.Verifiers))
 	maps.Copy(verifiers, cfg.Verifiers)
-	return &Authenticator{router: r, verifiers: verifiers}
+	return &Authenticator{
+		router:    r,
+		verifiers: verifiers,
+		problem:   cfg.Problem,
+	}
 }
 
 // Middleware enforces each request against the matched endpoint's declared
@@ -56,7 +75,7 @@ func (m *Authenticator) Middleware() func(http.Handler) http.Handler {
 			}
 			principals, problem := m.authorize(r, reqs)
 			if problem != nil {
-				writeProblem(w, problem)
+				writeProblem(w, m.shape(r, problem))
 				return
 			}
 			if len(principals) > 0 {
@@ -76,6 +95,11 @@ const (
 	forbidden
 )
 
+// authorize evaluates the OR-list reqs against r. It returns the resolved
+// principals of the first satisfied requirement, nil principals and a nil
+// problem when anonymous access is allowed, or the default problem to write:
+// TypeInvalidCredentials when any credential was invalid, TypeForbidden when
+// a credential lacked the permission, and TypeUnauthenticated otherwise.
 func (m *Authenticator) authorize(
 	r *http.Request,
 	reqs []openapi.SecurityRequirement,
@@ -98,15 +122,53 @@ func (m *Authenticator) authorize(
 		}
 	}
 	if sawUnauthorized {
-		return nil, router.Unauthorized("invalid or missing credentials")
+		return nil, withType(
+			router.Unauthorized("invalid or missing credentials"),
+			TypeInvalidCredentials,
+		)
 	}
 	if anonymousOK {
 		return nil, nil
 	}
 	if sawForbidden {
-		return nil, router.Forbidden("insufficient permissions")
+		return nil, withType(
+			router.Forbidden("insufficient permissions"),
+			TypeForbidden,
+		)
 	}
-	return nil, router.Unauthorized("authentication required")
+	return nil, withType(
+		router.Unauthorized("authentication required"),
+		TypeUnauthenticated,
+	)
+}
+
+// withType sets typ as p's Type and returns p.
+func withType(p *router.ProblemDetails, typ string) *router.ProblemDetails {
+	p.Type = typ
+	return p
+}
+
+// shape returns the problem to write in place of the default p: the result of
+// the Config.Problem hook when one is set and returns non-nil, otherwise p.
+// A hook result with a zero Status is written with p's status.
+func (m *Authenticator) shape(
+	r *http.Request,
+	p *router.ProblemDetails,
+) *router.ProblemDetails {
+	if m.problem == nil {
+		return p
+	}
+	status := p.Status
+	shaped := m.problem(r, p)
+	if shaped == nil {
+		return p
+	}
+	if shaped.Status != 0 {
+		return shaped
+	}
+	fixed := *shaped
+	fixed.Status = status
+	return &fixed
 }
 
 func (m *Authenticator) trySatisfy(

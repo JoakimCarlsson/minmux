@@ -111,7 +111,7 @@ func buildBinder(t reflect.Type, cfg bindConfig) (paramsBinder, error) {
 		v := reflect.New(t).Elem()
 		if needForm {
 			if err := parseRequestForm(r, cfg.maxMultipartMemory); err != nil {
-				return reflect.Value{}, BadRequest("form: " + err.Error())
+				return reflect.Value{}, newBindError(srcForm, "", "form", err)
 			}
 		}
 		for _, fb := range binders {
@@ -124,6 +124,9 @@ func buildBinder(t reflect.Type, cfg bindConfig) (paramsBinder, error) {
 	}, nil
 }
 
+// applyBinder sets field from the request input fb names. It returns nil
+// when an optional input is absent, and a *BindError when the input cannot
+// be bound.
 func applyBinder(
 	field reflect.Value,
 	fb fieldBinder,
@@ -133,9 +136,9 @@ func applyBinder(
 	switch fb.source {
 	case srcPath:
 		if err := setScalar(field, r.PathValue(fb.key)); err != nil {
-			return BadRequest(fmt.Sprintf(
-				"path parameter %q: %v", fb.key, err,
-			))
+			return newBindError(
+				srcPath, fb.key, fmt.Sprintf("path parameter %q", fb.key), err,
+			)
 		}
 	case srcQuery:
 		raw := r.URL.Query().Get(fb.key)
@@ -143,9 +146,12 @@ func applyBinder(
 			return nil
 		}
 		if err := setScalar(field, raw); err != nil {
-			return BadRequest(fmt.Sprintf(
-				"query parameter %q: %v", fb.key, err,
-			))
+			return newBindError(
+				srcQuery,
+				fb.key,
+				fmt.Sprintf("query parameter %q", fb.key),
+				err,
+			)
 		}
 	case srcHeader:
 		raw := r.Header.Get(fb.key)
@@ -153,9 +159,9 @@ func applyBinder(
 			return nil
 		}
 		if err := setScalar(field, raw); err != nil {
-			return BadRequest(fmt.Sprintf(
-				"header %q: %v", fb.key, err,
-			))
+			return newBindError(
+				srcHeader, fb.key, fmt.Sprintf("header %q", fb.key), err,
+			)
 		}
 	case srcForm:
 		return bindFormField(field, fb, r)
@@ -184,6 +190,9 @@ func parseRequestForm(r *http.Request, maxMem int64) error {
 	return r.ParseForm()
 }
 
+// bindFormField sets field from the form value fb names, as one scalar or
+// as a slice of every value. It returns a *BindError when a required field
+// is missing or a value does not parse.
 func bindFormField(
 	field reflect.Value,
 	fb fieldBinder,
@@ -192,9 +201,12 @@ func bindFormField(
 	values, present := r.PostForm[fb.key]
 	if !present || len(values) == 0 {
 		if fb.required {
-			return BadRequest(fmt.Sprintf(
-				"form field %q: required", fb.key,
-			))
+			return newBindError(
+				srcForm,
+				fb.key,
+				fmt.Sprintf("form field %q", fb.key),
+				ErrRequired,
+			)
 		}
 		return nil
 	}
@@ -202,22 +214,28 @@ func bindFormField(
 		out := reflect.MakeSlice(field.Type(), len(values), len(values))
 		for i, raw := range values {
 			if err := setScalar(out.Index(i), raw); err != nil {
-				return BadRequest(fmt.Sprintf(
-					"form field %q[%d]: %v", fb.key, i, err,
-				))
+				return newBindError(
+					srcForm,
+					fb.key,
+					fmt.Sprintf("form field %q[%d]", fb.key, i),
+					err,
+				)
 			}
 		}
 		field.Set(out)
 		return nil
 	}
 	if err := setScalar(field, values[0]); err != nil {
-		return BadRequest(fmt.Sprintf(
-			"form field %q: %v", fb.key, err,
-		))
+		return newBindError(
+			srcForm, fb.key, fmt.Sprintf("form field %q", fb.key), err,
+		)
 	}
 	return nil
 }
 
+// bindFileField sets field to the uploaded file headers fb names. It returns
+// a *BindError when a required file is missing, the request is not
+// multipart, or a file's content type is not allowed.
 func bindFileField(
 	field reflect.Value,
 	fb fieldBinder,
@@ -225,26 +243,32 @@ func bindFileField(
 ) error {
 	if r.MultipartForm == nil {
 		if fb.required {
-			return BadRequest(fmt.Sprintf(
-				"file field %q: requires multipart/form-data", fb.key,
-			))
+			return newBindError(
+				srcFile,
+				fb.key,
+				fmt.Sprintf("file field %q", fb.key),
+				errors.New("requires multipart/form-data"),
+			)
 		}
 		return nil
 	}
 	headers := r.MultipartForm.File[fb.key]
 	if len(headers) == 0 {
 		if fb.required {
-			return BadRequest(fmt.Sprintf(
-				"file field %q: required", fb.key,
-			))
+			return newBindError(
+				srcFile,
+				fb.key,
+				fmt.Sprintf("file field %q", fb.key),
+				ErrRequired,
+			)
 		}
 		return nil
 	}
 	for _, h := range headers {
 		if err := checkContentType(h, fb.allowed); err != nil {
-			return BadRequest(fmt.Sprintf(
-				"file field %q: %v", fb.key, err,
-			))
+			return newBindError(
+				srcFile, fb.key, fmt.Sprintf("file field %q", fb.key), err,
+			)
 		}
 	}
 	if field.Type() == fileHeaderSlcType {
@@ -255,6 +279,10 @@ func bindFileField(
 	return nil
 }
 
+// bindBodyField sets field from the request body according to fb's body
+// kind: the raw reader, the buffered bytes, a streaming iterator, or the
+// codec-decoded value. It returns a *BindError when the content type is not
+// allowed, the body exceeds the size cap, or it cannot be read or decoded.
 func bindBodyField(
 	field reflect.Value,
 	fb fieldBinder,
@@ -265,7 +293,7 @@ func bindBodyField(
 	case bodyReader:
 		if len(fb.allowed) > 0 {
 			if err := checkBodyContentType(r, fb.allowed); err != nil {
-				return BadRequest("body: " + err.Error())
+				return newBindError(srcBody, "", "body", err)
 			}
 		}
 		field.Set(reflect.ValueOf(r.Body))
@@ -273,7 +301,7 @@ func bindBodyField(
 	case bodyBytes:
 		if len(fb.allowed) > 0 {
 			if err := checkBodyContentType(r, fb.allowed); err != nil {
-				return BadRequest("body: " + err.Error())
+				return newBindError(srcBody, "", "body", err)
 			}
 		}
 		limit := cfg.maxMultipartMemory
@@ -282,18 +310,18 @@ func bindBodyField(
 		}
 		data, err := io.ReadAll(io.LimitReader(r.Body, limit+1))
 		if err != nil {
-			return BadRequest("body: " + err.Error())
+			return newBindError(srcBody, "", "body", err)
 		}
 		if int64(len(data)) > limit {
-			return BadRequest(fmt.Sprintf(
-				"body: exceeds max size of %d bytes", limit,
+			return newBindError(srcBody, "", "body", fmt.Errorf(
+				"exceeds max size of %d bytes", limit,
 			))
 		}
 		field.SetBytes(data)
 		return nil
 	case bodyIterJSON, bodyIterSSE, bodyIterMultipart:
 		if err := checkBodyContentType(r, fb.allowed); err != nil {
-			return BadRequest("body: " + err.Error())
+			return newBindError(srcBody, "", "body", err)
 		}
 		seq, err := buildBodyIterator(r, fb, cfg)
 		if err != nil {
@@ -306,7 +334,7 @@ func bindBodyField(
 			r.Body,
 			field.Addr().Interface(),
 		); err != nil {
-			return BadRequest("body: " + err.Error())
+			return newBindError(srcBody, "", "body", err)
 		}
 		return nil
 	}
@@ -331,7 +359,7 @@ func buildBodyIterator(
 	case bodyIterMultipart:
 		boundary, err := multipartBoundary(r)
 		if err != nil {
-			return reflect.Value{}, BadRequest("body: " + err.Error())
+			return reflect.Value{}, newBindError(srcBody, "", "body", err)
 		}
 		seq := multipartIterator(r.Body, boundary)
 		return reflect.ValueOf(seq).Convert(fb.iterType), nil

@@ -577,6 +577,31 @@ The default is 32 MiB. Multipart parts larger than the cap are spilled
 to a temp file on disk by `mime/multipart`; the cap on `[]byte` body
 fields is strict — oversize requests get a 400 ProblemDetails.
 
+## Shaping binding errors
+
+Every input that cannot be bound — a path, query, header, form, file or
+body value — answers a 400 ProblemDetails whose `detail` is the
+decoder's message. `router.WithBindError` lets the app decide that
+problem instead. The error it receives is a `*router.BindError`: its
+`Source` and `Name` say which input failed, it wraps the underlying cause
+for `errors.As`, and `Problem()` returns the default 400.
+
+```go
+r := router.New(router.WithBindError(
+    func(req *http.Request, err error) *router.ProblemDetails {
+        var be *router.BindError
+        if errors.As(err, &be) && be.Source == "body" {
+            return &router.ProblemDetails{Type: "invalid_body", Status: 400}
+        }
+        return &router.ProblemDetails{Type: "invalid_input", Status: 400}
+    },
+))
+```
+
+The status of the returned problem is the status written (400 when it
+is left zero), with `Content-Type: application/problem+json`; returning
+`nil` writes the default.
+
 ## Field formats
 
 Numeric Go types map automatically to OAS 3.2 formats: `int32`/`uint32`
