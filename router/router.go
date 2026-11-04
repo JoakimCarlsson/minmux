@@ -19,6 +19,7 @@ type Router struct {
 	endpoints          []*Endpoint
 	codec              Codec
 	maxMultipartMemory int64
+	bindError          func(*http.Request, error) *ProblemDetails
 }
 
 // RouterOption configures a Router at construction time.
@@ -35,6 +36,20 @@ func WithCodec(c Codec) RouterOption {
 // temporary file on disk by mime/multipart.
 func WithMaxMultipartMemory(n int64) RouterOption {
 	return func(r *Router) { r.maxMultipartMemory = n }
+}
+
+// WithBindError sets the hook that decides the problem written when a
+// request's path, query, header, form, file or body input cannot be bound
+// to a handler's Params struct. f receives the request and the binding
+// error, which is a *BindError for every input failure: its Source, Name
+// and wrapped cause tell the failures apart, and its Problem method returns
+// the default 400. The status of the returned ProblemDetails is the status
+// written, or 400 when it is zero, with Content-Type
+// application/problem+json; returning nil writes the default problem.
+func WithBindError(
+	f func(r *http.Request, err error) *ProblemDetails,
+) RouterOption {
+	return func(r *Router) { r.bindError = f }
 }
 
 // New constructs a Router.
@@ -153,6 +168,7 @@ func (r *Router) register(
 	dispatch, info, err := buildDispatcher(handler, bindConfig{
 		codec:              r.codec,
 		maxMultipartMemory: r.maxMultipartMemory,
+		bindError:          r.bindError,
 	})
 	if err != nil {
 		panic(fmt.Sprintf("minmux: %s %s: %v", method, full, err))

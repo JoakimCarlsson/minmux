@@ -88,6 +88,43 @@ Scalar UI — is in [`examples/scalar-ui`](examples/scalar-ui). The full
 generated-client loop, from server to committed client to round-trip
 test, is in [`examples/clientgen`](examples/clientgen).
 
+## Shaping the problems minmux writes
+
+minmux answers its own errors with `application/problem+json`. Two hooks let
+an app decide those problems before they are written, for example to answer
+with only a stable code in `type` that its web puts into words:
+
+```go
+r := router.New(router.WithBindError(
+    func(req *http.Request, err error) *router.ProblemDetails {
+        var be *router.BindError
+        if errors.As(err, &be) && be.Source == "body" {
+            return &router.ProblemDetails{Type: "invalid_body", Status: 400}
+        }
+        return &router.ProblemDetails{Type: "invalid_input", Status: 400}
+    },
+))
+
+authn := auth.New(r, auth.Config{
+    Verifiers: map[string]auth.Verifier{"bearerAuth": verifyBearer},
+    Problem: func(req *http.Request, p *router.ProblemDetails) *router.ProblemDetails {
+        return &router.ProblemDetails{Type: p.Type, Status: p.Status}
+    },
+})
+```
+
+- `router.WithBindError` decides every 400 for a path, query, header, form,
+  file or body input that cannot be bound. The error is a `*router.BindError`
+  whose `Source`, `Name` and wrapped cause tell the failures apart, and whose
+  `Problem()` is the default.
+- `auth.Config.Problem` decides every 401 and 403 the authenticator writes.
+  It receives the default problem, whose `type` is `unauthenticated` (no
+  credential), `invalid_credentials` (an invalid one) or `forbidden` (a
+  credential without the permission).
+
+The status of the returned problem is the status written (the default status
+when it is left zero); returning `nil` writes the default.
+
 ## Documentation
 
 - [Quick Start](www/docs/getting-started/quick-start.md)

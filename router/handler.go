@@ -1,7 +1,6 @@
 package router
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -13,10 +12,12 @@ type handlerInfo struct {
 
 // bindConfig is the per-router state the binder needs at request time:
 // the codec for JSON body decode, the cap for multipart and []byte body
-// reads. Threaded through register -> buildDispatcher -> buildBinder.
+// reads, and the hook that shapes the problem for a binding failure.
+// Threaded through register -> buildDispatcher -> buildBinder.
 type bindConfig struct {
 	codec              Codec
 	maxMultipartMemory int64
+	bindError          func(*http.Request, error) *ProblemDetails
 }
 
 var contextPtrType = reflect.TypeOf((*Context)(nil))
@@ -80,7 +81,7 @@ func buildDispatcher(
 		if binder != nil {
 			pv, err := binder(r)
 			if err != nil {
-				writeBindError(c, err)
+				writeBindError(c, cfg.bindError, err)
 				return
 			}
 			args = append(args, pv)
@@ -91,19 +92,37 @@ func buildDispatcher(
 	return dispatch, info, nil
 }
 
-// writeBindError writes a ProblemDetails for an input-binding failure. The
-// binder returns *ProblemDetails directly for path/query/header parse
-// errors and bad JSON bodies; this is just the dispatch-time writer.
-func writeBindError(c *Context, err error) {
+// writeBindError writes the ProblemDetails for an input-binding failure.
+// hook, when non-nil, receives the request and err and decides the problem;
+// a nil hook, or a hook returning nil, writes the default problem for err.
+// The response status is the problem's Status, or 400 when the hook leaves
+// it zero, and the Content-Type is always application/problem+json.
+func writeBindError(
+	c *Context,
+	hook func(*http.Request, error) *ProblemDetails,
+	err error,
+) {
 	var pd *ProblemDetails
-	if !errors.As(err, &pd) {
-		pd = &ProblemDetails{
-			Status: http.StatusBadRequest,
-			Title:  http.StatusText(http.StatusBadRequest),
-			Detail: err.Error(),
-		}
+	if hook != nil {
+		pd = hook(c.Request, err)
 	}
+	if pd == nil {
+		pd = defaultBindProblem(err)
+	}
+	pd = withDefaultStatus(pd, http.StatusBadRequest)
 	c.Writer.Header().Set("Content-Type", "application/problem+json")
 	c.Writer.WriteHeader(pd.Status)
 	_ = c.codec.Encode(c.Writer, pd)
+}
+
+// withDefaultStatus returns pd, or a copy of pd with Status set to status
+// when pd's Status is zero, so a problem without a status never reaches
+// WriteHeader.
+func withDefaultStatus(pd *ProblemDetails, status int) *ProblemDetails {
+	if pd.Status != 0 {
+		return pd
+	}
+	fixed := *pd
+	fixed.Status = status
+	return &fixed
 }

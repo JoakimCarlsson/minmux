@@ -107,6 +107,34 @@ func me(c *router.Context) {
 case); `PrincipalFor[T]` selects by scheme name when a route requires several
 schemes together via `SecurityAll`.
 
+## Shaping the 401 and 403
+
+The authenticator writes a `application/problem+json` body for each failure.
+Its `type` tells the three outcomes apart:
+
+| Outcome | Status | `type` |
+|---|---|---|
+| no credential on a required route | `401` | `unauthenticated` (`auth.TypeUnauthenticated`) |
+| a credential that is invalid | `401` | `invalid_credentials` (`auth.TypeInvalidCredentials`) |
+| a valid credential without the permission | `403` | `forbidden` (`auth.TypeForbidden`) |
+
+Set `Config.Problem` to decide the problem before it is written. It receives
+the request and the default problem; the status of the problem it returns is
+the status written (the default status when it is left zero), and returning
+`nil` keeps the default:
+
+```go
+authn := auth.New(r, auth.Config{
+    Verifiers: map[string]auth.Verifier{"bearerAuth": verifyBearer},
+    Problem: func(r *http.Request, p *router.ProblemDetails) *router.ProblemDetails {
+        return &router.ProblemDetails{Type: p.Type, Status: p.Status}
+    },
+})
+```
+
+A request without a credential then gets exactly
+`{"type":"unauthenticated","status":401}`.
+
 ## How it works
 
 The middleware calls `router.Match` to find the endpoint, reads its declared
