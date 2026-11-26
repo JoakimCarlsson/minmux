@@ -54,7 +54,7 @@ func main() {
     )
 
     r.Post("/products", createProduct) // mutations invalidate the tag
-    // After creating, call cache.InvalidateTag("products") in your handler.
+    // After creating, call cache.InvalidateTag(c.Ctx(), "products") in your handler.
 
     http.ListenAndServe(":8080", r)
 }
@@ -123,7 +123,7 @@ r.Get("/products/{id}", getProduct,
 )
 
 // In a mutation handler:
-cache.InvalidateTag("products")
+cache.InvalidateTag(c.Ctx(), "products")
 ```
 
 Tag bookkeeping is per-backend; both backends in this repo handle it.
@@ -191,9 +191,9 @@ also available.
 ## Invalidation API
 
 ```go
-cache.Clear()                            // remove every entry
-cache.InvalidateTag("products")          // remove entries tagged "products"
-cache.InvalidateTags("products", "hot")  // multi-tag invalidation
+cache.Clear(ctx)                              // remove every entry
+cache.InvalidateTag(ctx, "products")          // remove entries tagged "products"
+cache.InvalidateTags(ctx, "products", "hot")  // multi-tag invalidation
 cache.Close()                            // stop the storage's cleanup goroutine
 ```
 
@@ -232,7 +232,9 @@ store := redis.New(redis.Options{
 })
 ```
 
-Survives process restart; shared across replicas.
+Survives process restart; shared across replicas. Every command runs on
+the context the cache passes, the request's for lookups and stores, so a
+client instrumented with `redisotel` traces them as part of the request.
 
 ## Writing a custom backend
 
@@ -240,14 +242,21 @@ Implement `outputcache.Storage`:
 
 ```go
 type Storage interface {
-    Get(key string) (*CachedResponse, bool)
-    Set(key string, response *CachedResponse, ttl time.Duration)
-    Delete(key string)
-    Clear()
-    InvalidateTag(tag string)
-    InvalidateTags(tags ...string)
+    Get(ctx context.Context, key string) (*CachedResponse, bool)
+    Set(ctx context.Context, key string, response *CachedResponse, ttl time.Duration)
+    Delete(ctx context.Context, key string)
+    Clear(ctx context.Context)
+    InvalidateTag(ctx context.Context, tag string)
+    InvalidateTags(ctx context.Context, tags ...string)
 }
 ```
+
+Every method gets a context: `Get` and `Set` the request's (`Set` without
+its cancellation, so a client that hangs up after the handler finished
+does not stop the response being stored), the invalidation methods the
+one their caller passes. A backend that does I/O should run it on that
+context, so deadlines apply and traced clients (such as `redisotel`)
+record their spans inside the request's trace.
 
 Optionally implement `StartCleanup(interval) func()` to receive a
 periodic eviction tick from `Cache.New`.

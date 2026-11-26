@@ -1,6 +1,7 @@
 package outputcache
 
 import (
+	"context"
 	"net/http"
 	"time"
 )
@@ -19,26 +20,33 @@ type CachedResponse struct {
 }
 
 // Storage is the persistence backend for cached responses. Implementations
-// must be safe for concurrent use.
+// must be safe for concurrent use. Every method takes the context of the
+// request or caller it serves, so a backend that does I/O honours its
+// cancellation and deadline and its traced client calls join its trace.
 type Storage interface {
 	// Get retrieves a cached response by key.
 	// Returns the cached response and true if found, nil and false otherwise.
 	// Implementations are expected to handle expiration and sliding TTL
 	// internally.
-	Get(key string) (*CachedResponse, bool)
+	Get(ctx context.Context, key string) (*CachedResponse, bool)
 
 	// Set stores a cached response with the given TTL.
-	Set(key string, response *CachedResponse, ttl time.Duration)
+	Set(
+		ctx context.Context,
+		key string,
+		response *CachedResponse,
+		ttl time.Duration,
+	)
 
 	// Delete removes a cached response by key.
-	Delete(key string)
+	Delete(ctx context.Context, key string)
 
 	// Clear removes all cached responses.
-	Clear()
+	Clear(ctx context.Context)
 
 	// InvalidateTag removes all cached responses with the given tag.
-	InvalidateTag(tag string)
+	InvalidateTag(ctx context.Context, tag string)
 
 	// InvalidateTags removes all cached responses with any of the given tags.
-	InvalidateTags(tags ...string)
+	InvalidateTags(ctx context.Context, tags ...string)
 }

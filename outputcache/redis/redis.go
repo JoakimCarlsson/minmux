@@ -17,7 +17,6 @@ import (
 type Store struct {
 	client redis.UniversalClient
 	prefix string
-	ctx    func() context.Context
 }
 
 // Options configures a redis Store.
@@ -28,11 +27,6 @@ type Options struct {
 	// Prefix is prepended to every cache key. Defaults to
 	// "minmux:outputcache:" when empty.
 	Prefix string
-
-	// Context returns the context used for all Redis operations. Defaults
-	// to context.Background. Override if you want operations to inherit
-	// a server-wide deadline.
-	Context func() context.Context
 }
 
 // New constructs a redis Store. Panics if Options.Client is nil.
@@ -44,20 +38,19 @@ func New(opts Options) *Store {
 	if prefix == "" {
 		prefix = "minmux:outputcache:"
 	}
-	ctx := opts.Context
-	if ctx == nil {
-		ctx = context.Background
-	}
-	return &Store{client: opts.Client, prefix: prefix, ctx: ctx}
+	return &Store{client: opts.Client, prefix: prefix}
 }
 
 func (s *Store) dataKey(key string) string { return s.prefix + key }
 func (s *Store) tagKey(tag string) string  { return s.prefix + "tag:" + tag }
 
-// Get retrieves a cached response. Transient Redis errors and missing
-// keys both produce a miss.
-func (s *Store) Get(key string) (*outputcache.CachedResponse, bool) {
-	raw, err := s.client.Get(s.ctx(), s.dataKey(key)).Bytes()
+// Get retrieves a cached response, running its commands on ctx. Transient
+// Redis errors and missing keys both produce a miss.
+func (s *Store) Get(
+	ctx context.Context,
+	key string,
+) (*outputcache.CachedResponse, bool) {
+	raw, err := s.client.Get(ctx, s.dataKey(key)).Bytes()
 	if err != nil {
 		return nil, false
 	}
@@ -66,13 +59,15 @@ func (s *Store) Get(key string) (*outputcache.CachedResponse, bool) {
 		return nil, false
 	}
 	if e.SlidingExpiration {
-		_ = s.client.Expire(s.ctx(), s.dataKey(key), e.SlidingDuration).Err()
+		_ = s.client.Expire(ctx, s.dataKey(key), e.SlidingDuration).Err()
 	}
 	return &e, true
 }
 
-// Set stores a cached response with the given TTL.
+// Set stores a cached response with the given TTL, running its commands
+// on ctx.
 func (s *Store) Set(
+	ctx context.Context,
 	key string,
 	response *outputcache.CachedResponse,
 	ttl time.Duration,
@@ -83,21 +78,21 @@ func (s *Store) Set(
 		return
 	}
 	pipe := s.client.Pipeline()
-	pipe.Set(s.ctx(), s.dataKey(key), raw, ttl)
+	pipe.Set(ctx, s.dataKey(key), raw, ttl)
 	for _, tag := range response.Tags {
-		pipe.SAdd(s.ctx(), s.tagKey(tag), key)
+		pipe.SAdd(ctx, s.tagKey(tag), key)
 	}
-	_, _ = pipe.Exec(s.ctx())
+	_, _ = pipe.Exec(ctx)
 }
 
-// Delete removes the cached response for key.
-func (s *Store) Delete(key string) {
-	_ = s.client.Del(s.ctx(), s.dataKey(key)).Err()
+// Delete removes the cached response for key, running its command on ctx.
+func (s *Store) Delete(ctx context.Context, key string) {
+	_ = s.client.Del(ctx, s.dataKey(key)).Err()
 }
 
-// Clear removes every entry under this Store's prefix using SCAN + DEL.
-func (s *Store) Clear() {
-	ctx := s.ctx()
+// Clear removes every entry under this Store's prefix using SCAN + DEL,
+// running its commands on ctx.
+func (s *Store) Clear(ctx context.Context) {
 	var cursor uint64
 	for {
 		keys, next, err := s.client.Scan(ctx, cursor, s.prefix+"*", 256).
@@ -115,9 +110,9 @@ func (s *Store) Clear() {
 	}
 }
 
-// InvalidateTag removes every cached response carrying the given tag.
-func (s *Store) InvalidateTag(tag string) {
-	ctx := s.ctx()
+// InvalidateTag removes every cached response carrying the given tag,
+// running its commands on ctx.
+func (s *Store) InvalidateTag(ctx context.Context, tag string) {
 	members, err := s.client.SMembers(ctx, s.tagKey(tag)).Result()
 	if err != nil {
 		return
@@ -130,9 +125,10 @@ func (s *Store) InvalidateTag(tag string) {
 	_, _ = pipe.Exec(ctx)
 }
 
-// InvalidateTags removes every cached response carrying any of the given tags.
-func (s *Store) InvalidateTags(tags ...string) {
+// InvalidateTags removes every cached response carrying any of the given
+// tags, running its commands on ctx.
+func (s *Store) InvalidateTags(ctx context.Context, tags ...string) {
 	for _, t := range tags {
-		s.InvalidateTag(t)
+		s.InvalidateTag(ctx, t)
 	}
 }

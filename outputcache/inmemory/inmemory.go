@@ -4,6 +4,7 @@
 package inmemory
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -27,7 +28,11 @@ func New() *Store {
 
 // Get retrieves a cached response by key. Expired entries are removed
 // lazily; entries with sliding expiration have their ExpiresAt extended.
-func (s *Store) Get(key string) (*outputcache.CachedResponse, bool) {
+// ctx is unused: the store does no I/O.
+func (s *Store) Get(
+	ctx context.Context,
+	key string,
+) (*outputcache.CachedResponse, bool) {
 	s.mu.RLock()
 	response, ok := s.cache[key]
 	s.mu.RUnlock()
@@ -37,7 +42,7 @@ func (s *Store) Get(key string) (*outputcache.CachedResponse, bool) {
 
 	now := time.Now()
 	if now.After(response.ExpiresAt) {
-		s.Delete(key)
+		s.Delete(ctx, key)
 		return nil, false
 	}
 
@@ -50,8 +55,9 @@ func (s *Store) Get(key string) (*outputcache.CachedResponse, bool) {
 	return response, true
 }
 
-// Set stores a cached response with the given TTL.
+// Set stores a cached response with the given TTL. ctx is unused.
 func (s *Store) Set(
+	_ context.Context,
 	key string,
 	response *outputcache.CachedResponse,
 	ttl time.Duration,
@@ -66,8 +72,9 @@ func (s *Store) Set(
 	s.mu.Unlock()
 }
 
-// Delete removes the cached response for key, cleaning the tag index.
-func (s *Store) Delete(key string) {
+// Delete removes the cached response for key, cleaning the tag index. ctx
+// is unused.
+func (s *Store) Delete(_ context.Context, key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -90,16 +97,17 @@ func (s *Store) Delete(key string) {
 	delete(s.cache, key)
 }
 
-// Clear removes every cached response.
-func (s *Store) Clear() {
+// Clear removes every cached response. ctx is unused.
+func (s *Store) Clear(_ context.Context) {
 	s.mu.Lock()
 	s.cache = make(map[string]*outputcache.CachedResponse)
 	s.tagIndex = make(map[string][]string)
 	s.mu.Unlock()
 }
 
-// InvalidateTag removes every cached response carrying the given tag.
-func (s *Store) InvalidateTag(tag string) {
+// InvalidateTag removes every cached response carrying the given tag. ctx
+// is unused.
+func (s *Store) InvalidateTag(_ context.Context, tag string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -113,8 +121,9 @@ func (s *Store) InvalidateTag(tag string) {
 	delete(s.tagIndex, tag)
 }
 
-// InvalidateTags removes every cached response carrying any of the given tags.
-func (s *Store) InvalidateTags(tags ...string) {
+// InvalidateTags removes every cached response carrying any of the given
+// tags. ctx is unused.
+func (s *Store) InvalidateTags(_ context.Context, tags ...string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

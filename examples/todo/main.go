@@ -226,7 +226,7 @@ func (a *API) Get(c *router.Context, p GetTodoParams) {
 
 func (a *API) Create(c *router.Context, p CreateTodoParams) {
 	t := a.store.Create(p.Body)
-	a.cache.InvalidateTag("todos")
+	a.cache.InvalidateTag(c.Ctx(), "todos")
 	c.Header("Location", "/api/v1/todos/"+strconv.Itoa(t.ID))
 	c.JSON(http.StatusCreated, t)
 }
@@ -237,7 +237,7 @@ func (a *API) Update(c *router.Context, p UpdateTodoParams) {
 		c.JSON(http.StatusNotFound, router.NotFound("todo not found"))
 		return
 	}
-	a.cache.InvalidateTag("todos")
+	a.cache.InvalidateTag(c.Ctx(), "todos")
 	c.JSON(http.StatusOK, t)
 }
 
@@ -246,7 +246,7 @@ func (a *API) Delete(c *router.Context, p DeleteTodoParams) {
 		c.JSON(http.StatusNotFound, router.NotFound("todo not found"))
 		return
 	}
-	a.cache.InvalidateTag("todos")
+	a.cache.InvalidateTag(c.Ctx(), "todos")
 	c.NoContent()
 }
 

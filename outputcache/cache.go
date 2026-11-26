@@ -2,6 +2,7 @@ package outputcache
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"time"
@@ -91,7 +92,7 @@ func (c *Cache) Middleware() func(http.Handler) http.Handler {
 			keyGen := newCacheKeyGenerator(opts)
 			cacheKey := keyGen.GenerateKey(r)
 
-			if cached, ok := c.storage.Get(cacheKey); ok {
+			if cached, ok := c.storage.Get(r.Context(), cacheKey); ok {
 				if keyGen.withRevalidation && cached.ETag != "" &&
 					shouldRevalidate(
 						r.Header.Get("If-None-Match"),
@@ -131,17 +132,22 @@ func (c *Cache) Middleware() func(http.Handler) http.Handler {
 			}
 
 			now := time.Now()
-			c.storage.Set(cacheKey, &CachedResponse{
-				StatusCode:        recorder.statusCode,
-				Headers:           recorder.Header().Clone(),
-				Body:              body,
-				CachedAt:          now,
-				ExpiresAt:         now.Add(duration),
-				Tags:              keyGen.tags,
-				SlidingExpiration: keyGen.slidingExp,
-				SlidingDuration:   duration,
-				ETag:              etag,
-			}, duration)
+			c.storage.Set(
+				context.WithoutCancel(r.Context()),
+				cacheKey,
+				&CachedResponse{
+					StatusCode:        recorder.statusCode,
+					Headers:           recorder.Header().Clone(),
+					Body:              body,
+					CachedAt:          now,
+					ExpiresAt:         now.Add(duration),
+					Tags:              keyGen.tags,
+					SlidingExpiration: keyGen.slidingExp,
+					SlidingDuration:   duration,
+					ETag:              etag,
+				},
+				duration,
+			)
 		})
 	}
 }
@@ -160,17 +166,22 @@ func (c *Cache) serveCachedResponse(
 	_, _ = w.Write(cached.Body)
 }
 
-// Clear removes every cached response.
-func (c *Cache) Clear() { c.storage.Clear() }
+// Clear removes every cached response. ctx is passed to the storage
+// backend, typically the context of the request that changed the data.
+func (c *Cache) Clear(ctx context.Context) { c.storage.Clear(ctx) }
 
-// InvalidateTag removes every cached response carrying the given tag.
-func (c *Cache) InvalidateTag(tag string) { c.storage.InvalidateTag(tag) }
+// InvalidateTag removes every cached response carrying the given tag. ctx is
+// passed to the storage backend, typically the context of the request that
+// changed the data.
+func (c *Cache) InvalidateTag(ctx context.Context, tag string) {
+	c.storage.InvalidateTag(ctx, tag)
+}
 
-// InvalidateTags removes every cached response carrying any of the given tags.
-func (c *Cache) InvalidateTags(
-	tags ...string,
-) {
-	c.storage.InvalidateTags(tags...)
+// InvalidateTags removes every cached response carrying any of the given
+// tags. ctx is passed to the storage backend, typically the context of the
+// request that changed the data.
+func (c *Cache) InvalidateTags(ctx context.Context, tags ...string) {
+	c.storage.InvalidateTags(ctx, tags...)
 }
 
 // Close stops any background cleanup hook started on the storage backend.
